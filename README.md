@@ -2,4 +2,332 @@
 
 # tui-search
 
-Created in [T3 Code](https://t3.codes).
+`search` is a fast terminal client for web and code search. It has a full
+TUI and an inline CLI, DuckDuckGo-style `!bangs`, and summaries computed on
+your device. It also integrates with `$EDITOR`. It is a single static Go
+binary with no runtime dependencies, so it runs well on a Raspberry Pi Zero,
+a phone (Termux), over SSH or in tmux, and on a full-size monitor.
+
+```sh
+search                                   # open the TUI
+search "nixos flakes tutorial"           # inline results + summary
+search !w alan turing                    # bangs work inline too
+search --engine gh --code --lang go "tea.NewProgram"
+search -E                                # write the query in $EDITOR
+```
+
+## Features
+
+- **Two modes:** the TUI opens when you run `search` with no arguments.
+  `search <query>` prints results inline, and `--json` or `--markdown` give
+  output for scripts.
+- **Engines:** DuckDuckGo (the default, no key needed), Google, Bing, Kagi,
+  Brave, Mojeek, SearXNG, Wikipedia, Stack Overflow, Hacker News, GitHub,
+  GitLab, Sourcegraph and Codeberg/Gitea/Forgejo. You can add custom
+  URL, JSON-API or HTML-scraping engines. If a web search fails, a fallback
+  engine is tried.
+- **Bangs:** `!g`, `!ddg`, `!b`, `!k`, `!w`, `!so`, `!gh`, `!ghc` (GitHub
+  code), `!sg` and so on. URL bangs (`!yt`, `!aw`, `!nix`, `!hm`, `!mdn` and
+  about 40 more) open in your browser. A bare `!` is "I'm feeling lucky". In
+  the TUI, Tab completes a bang. Run `search --list-bangs` to see them all.
+- **Code search:** search GitHub, GitLab and Sourcegraph (Sourcegraph needs
+  no key) with `--lang` and `--repo` filters. Results show line-numbered
+  fragments. `Y` copies the code, and `e` opens the **full file** in
+  `$EDITOR` at the matching line.
+- **Summaries on your device:** extractive multi-document summarisation that
+  finds the consensus across results and removes redundant sentences. It uses
+  no model and no network, and runs in milliseconds on weak hardware. `s`
+  fetches a result page and summarises it, with readable text extraction. You
+  can optionally pipe results to a local LLM (`summary.command = "ollama run
+  llama3.2:1b"`).
+- **`$EDITOR` integration:** compose queries in a temporary Markdown file
+  (`ctrl+e`, `search -E`). View the whole result set (`E`, `--edit`) or a
+  fetched page as Markdown (`e`), or open source files (`e` on code results).
+- **Navigation:** vim keys, arrow keys and the mouse (wheel, click, click
+  again for details). All keybindings can be changed, and a status bar shows
+  hints that fit the terminal width.
+- **Responsive layout:** a split list and preview pane on wide terminals, and
+  a stacked layout on phones, tablets and narrow tmux panes. It reflows live
+  when you resize.
+- **Credentials:** set them literally or with `*_env`, `*_file` or
+  `*_command` (works with `pass`, `op`, `gh auth token`, agenix, sops-nix and
+  so on).
+- **Low-power mode:** `low_power = true` uses fewer results, smaller download
+  caps, no spinner animation and the summary bar is off by default.
+- **Packaging:** a Nix flake and home-manager module for x86_64/aarch64 Linux
+  and aarch64 macOS, plus Windows builds.
+
+## Install
+
+### Nix
+
+```sh
+nix run github:heywoodlh-bot/tui-search -- "hello world"
+nix profile install github:heywoodlh-bot/tui-search
+```
+
+The flake provides `packages.<system>.default`, `overlays.default`,
+`homeManagerModules.default` (also exported as `homeModules.default`), and a
+`devShells.default`.
+
+### home-manager
+
+```nix
+{
+  inputs.tui-search.url = "github:heywoodlh-bot/tui-search";
+  # ...
+  home-manager.users.me = {
+    imports = [ inputs.tui-search.homeManagerModules.default ];
+    programs.tui-search = {
+      enable = true;
+      settings = {
+        default_engine = "kagi";
+        default_code_engine = "github";
+        summary.sentences = 4;
+        ui.layout = "auto";
+        keys.open = [ "o" "enter" ];
+        bangs.nw = "https://wiki.nixos.org/w/index.php?search={query}";
+        engines = {
+          kagi.token_file = "~/.config/kagi/session-token";
+          github.token_command = "gh auth token";
+        };
+      };
+    };
+  };
+}
+```
+
+`settings` accepts every key of the TOML config below. It is written to
+`~/.config/tui-search/config.toml` on both Linux and macOS. Keep secrets out
+of `settings` because they would end up in the Nix store. Use `*_file`,
+`*_command` or `*_env` instead.
+
+### Go, including Windows
+
+```sh
+# private repo: export GOPRIVATE=github.com/heywoodlh-bot/*
+go install github.com/heywoodlh-bot/tui-search/cmd/search@latest
+```
+
+On Windows the config file lives at `%AppData%\tui-search\config.toml`. The
+default editor is `notepad`, `clip` handles the clipboard, and links open in
+the default browser. Windows Terminal supports the mouse and colours. The
+release workflow also builds `windows/amd64` and `windows/arm64` binaries.
+
+## Usage
+
+```text
+search                       open the TUI
+search [flags] <query...>    search inline
+
+  -e, --engine NAME     engine name or bang alias (ddg, g, b, k, gh, sg, ...)
+  -c, --code            code search (default_code_engine unless --engine supports code)
+  -t, --type TYPE       web | code | repos | issues
+  -l, --lang LANG       code language filter        -r, --repo OWNER/NAME
+  -n, --limit N         number of results           -p, --page N
+  -s, --summary         print the summary           --no-summary
+  -j, --json            JSON output                 -m, --markdown
+  -o, --open            open the search page in a browser
+  -1, --lucky           open the first result
+  -u, --url             print the engine's search URL
+  -i, --tui             open the TUI with the query
+  -E, --compose         write the query in $EDITOR  --edit (results in $EDITOR)
+      --list-engines    --list-bangs                --example-config
+```
+
+Queries can also come from stdin: `echo "rust lifetimes" | search -m`.
+
+### TUI keybindings (defaults)
+
+| Keys | Action |
+| --- | --- |
+| `/`, `i` | edit the query (insert mode) |
+| `enter`, `l`, `→`, `space` | result details (in the details view, `enter` opens the browser) |
+| `j`/`k`, `↓`/`↑` | move down/up, or scroll |
+| `g`/`G`, `home`/`end` | first/last result |
+| `ctrl+d`/`ctrl+u`, `pgdn`/`pgup` | page down/up |
+| `esc`, `h`, `←` | back |
+| `o` / `O` | open the result / the engine's search page in the browser |
+| `y` / `Y` / `M` | copy the URL / snippet or code / Markdown link |
+| `e` | open the result in `$EDITOR` (page as Markdown, or the full code file at the matching line) |
+| `E` | open all results (with summary) as Markdown in `$EDITOR` |
+| `s` | fetch and summarise the result's page |
+| `S` | toggle the results summary |
+| `n`/`N`, `]`/`[` | next/previous results page |
+| `tab` / `shift+tab` | next/previous engine (re-runs the query) |
+| `t` | cycle search type (web → code → repos → issues) |
+| `ctrl+e`, `c` | compose the query in `$EDITOR` |
+| `r` | re-run the search |
+| `?` | help (all bindings and bangs) |
+| `q`, `ctrl+c` | quit |
+
+In insert mode, `enter` searches, `esc` returns to normal mode, `tab`
+completes a `!bang` (or switches engine), `↑`/`↓` move through history and
+`ctrl+e` opens `$EDITOR`.
+
+Mouse: the wheel scrolls, a click selects a result, a second click opens its
+details, and clicking the query line edits it.
+
+Rebind any action under `[keys]`:
+
+```toml
+[keys]
+down = ["j", "down", "ctrl+n"]
+up = ["k", "up", "ctrl+p"]
+open = ["o", "enter"]
+details = ["l", "right"]
+```
+
+## Engines and credentials
+
+| Engine | Bangs | Types | Auth |
+| --- | --- | --- | --- |
+| duckduckgo (default) | `!ddg` `!d` | web | none (HTML endpoint) |
+| google | `!g` | web | `api_key` + `cx` ([Programmable Search](https://programmablesearchengine.google.com/)) |
+| bing | `!b` | web | none (HTML, best effort) |
+| kagi | `!k` | web | `api_key` (Search API) **or** `token` (Session Link token) |
+| brave | `!br` | web | `api_key` |
+| mojeek | `!m` | web | `api_key` recommended (scraping is captcha'd) |
+| searxng | `!sx` | web | `base_url`; optional `username`/`password` or `token` |
+| wikipedia | `!w` | web | none (`language = "de"` etc.) |
+| stackoverflow | `!so` | web | none (optional `api_key` for quota) |
+| hackernews | `!hn` | web | none |
+| github | `!gh` `!ghc` `!ghi` | repos, code, issues | code search needs a token: `token*`, `$GITHUB_TOKEN`/`$GH_TOKEN`, or `gh auth token` (automatic) |
+| gitlab | `!gl` `!glc` `!gli` | repos, code, issues | code/issues need `token*` or `$GITLAB_TOKEN` |
+| sourcegraph | `!sg` `!sgc` | code, repos | none for sourcegraph.com; `token` for private instances |
+| codeberg | `!cb` | repos | optional `token`; any Gitea/Forgejo via `base_url` |
+
+Each credential (`api_key`, `token`, `password`, `cx`) can be set as:
+
+```toml
+[engines.brave]
+api_key = "literal"                      # or
+api_key_env = "BRAVE_API_KEY"            # or
+api_key_file = "~/.secrets/brave"        # or (agenix / sops-nix paths work too)
+api_key_command = "pass show brave/api"  # or op read ..., gh auth token, ...
+```
+
+Google, Kagi, Brave and paid APIs fail with a clear message when credentials
+are missing. Press `O` (or use `--open`) to run the same search in your
+browser instead. When the default web engine fails for another reason (rate
+limiting, captcha), `fallback_engine` (Bing by default, `"none"` disables it)
+is tried and the status bar says so.
+
+### Custom engines
+
+```toml
+# Browser-only
+[engines.nixwiki]
+type = "url"
+url = "https://wiki.nixos.org/w/index.php?search={query}"
+bangs = ["nw"]
+
+# Another instance of a built-in type (gitlab, github, searxng, sourcegraph, gitea/forgejo)
+[engines.work]
+type = "gitlab"
+base_url = "https://gitlab.example.com"
+token_command = "pass show work/gitlab"
+bangs = ["work"]
+
+# Any JSON API
+[engines.myapi]
+type = "json"
+url = "https://api.example.com/search?q={query}&page={page}&n={limit}"
+headers = { Authorization = "Bearer {token}" }
+token_env = "MYAPI_TOKEN"
+results_path = "data.items"
+title_field = "name"
+url_field = "link"
+snippet_field = "description"
+
+# Any HTML page
+[engines.lobsters]
+type = "html"
+url = "https://lobste.rs/search?q={query}&what=stories"
+result_selector = "li.story"
+link_selector = "a.u-url"
+bangs = ["lob"]
+```
+
+URL templates support `{query}`, `{query_path}`, `{query_raw}`, `{page}`,
+`{page0}`, `{limit}`, `{offset}` and `{offset1}`. The `[bangs]` table can
+also map a bang to an engine (`"bing"`), an engine and type (`"gitlab:code"`),
+a type alone (`":code"`), or a URL template.
+
+## Configuration
+
+The config file is `$XDG_CONFIG_HOME/tui-search/config.toml` (by default
+`~/.config/tui-search/config.toml`). Override it with `--config` or
+`$TUI_SEARCH_CONFIG`. Every key is optional. `search --example-config` prints
+a fully commented example ([source](internal/config/example.toml)).
+
+```toml
+default_engine = "duckduckgo"
+default_code_engine = "github"   # default: github with a token, else sourcegraph
+fallback_engine = "bing"         # "none" to disable
+results = 20
+timeout = "15s"
+low_power = false
+browser = ""                     # $BROWSER / xdg-open / open / termux-open-url; w3m & co. run in the TUI
+editor = ""                      # $VISUAL / $EDITOR
+clipboard = "auto"               # auto | osc52 | command | none
+
+[summary]
+enabled = true
+sentences = 3
+# command = "ollama run llama3.2:1b"
+
+[ui]
+mouse = true
+layout = "auto"                  # auto | split | stacked
+split_min_width = 110
+snippet_lines = 2
+accent_color = "#ea580c"
+ascii = false
+```
+
+Clipboard support: `auto` uses `wl-copy`, `xclip`/`xsel`, `pbcopy`, `clip`
+or `termux-clipboard-set` when it finds one. Otherwise it falls back to OSC 52,
+which works over SSH and inside tmux and screen. Over SSH it sends OSC 52 too.
+
+## How summaries work
+
+`internal/summary` is a centroid-based multi-document summariser:
+
+1. Snippets are split into sentences. Boilerplate such as date prefixes and
+   ellipses is stripped, then words are tokenised, stop words removed and the
+   rest stemmed.
+2. A weighted "centroid" of the result set is built. Terms that appear in many
+   *different* results score higher (consensus × IDF).
+3. Each sentence is scored by cosine similarity to the centroid, plus query
+   overlap, plus a small boost for higher-ranked results. Code-heavy,
+   truncated and fragmentary sentences are penalised.
+4. Sentences are chosen with maximal marginal relevance, so near-duplicates
+   are skipped.
+
+The work is linear in input size, needs no model files, and allocates little
+memory. Fetched pages (`s`) go through the same pipeline after a readability
+pass that drops navigation, scripts and footers. Downloads are capped by
+`max_body_kb`.
+
+## Development
+
+```sh
+nix develop          # go, gopls, gotools
+go test ./...
+go run ./cmd/search
+nix flake check      # builds the package (runs tests) and checks the home-manager module
+```
+
+Layout: `cmd/search` (entry point), `internal/cli` (flags, inline output),
+`internal/tui` (Bubble Tea UI), `internal/engine` (backends),
+`internal/bang`, `internal/summary`, `internal/app` (shared core),
+`internal/sys` (clipboard/browser/editor), `internal/config`, and `nix/`
+(package and home-manager module).
+
+When you update Go dependencies, refresh `vendorHash` in `nix/package.nix`
+(build once and copy the `got:` hash).
+
+## License
+
+MIT
