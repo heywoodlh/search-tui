@@ -122,8 +122,30 @@ go install github.com/heywoodlh/tui-search/cmd/search@latest
 
 On Windows the config file lives at `%AppData%\tui-search\config.toml`. The
 default editor is `notepad`, `clip` handles the clipboard, and links open in
-the default browser. Windows Terminal supports the mouse and colours. The
-release workflow also builds `windows/amd64` and `windows/arm64` binaries.
+the default browser. Windows Terminal supports the mouse and colours.
+
+### Prebuilt binaries
+
+Every [release](https://github.com/heywoodlh/tui-search/releases) ships these
+binaries, plus a `SHA256SUMS` file:
+
+| OS | Architectures | Linking |
+| --- | --- | --- |
+| Linux | amd64, arm64, armv6 (runs on armv6/v7, e.g. Raspberry Pi), riscv64 | static: runs on any distribution (glibc, musl, NixOS, ...) |
+| FreeBSD | amd64, arm64 | static |
+| NetBSD | amd64, arm64 | static |
+| OpenBSD | amd64, arm64 | base-system `libc`/`libpthread` only (OpenBSD requires system calls to go through libc, so Go can't build a static binary there) |
+| macOS | arm64 | `libSystem`, like every macOS program |
+| Windows | amd64, arm64 | `.exe` |
+
+```sh
+curl -LO https://github.com/heywoodlh/tui-search/releases/latest/download/search-linux-amd64
+chmod +x search-linux-amd64 && mv search-linux-amd64 ~/.local/bin/search
+```
+
+CI builds the same binaries on every pull request and fails if any Linux,
+FreeBSD or NetBSD binary isn't statically linked, or if an OpenBSD binary
+links anything beyond libc (`scripts/build-release.sh`).
 
 ## Usage
 
@@ -449,6 +471,34 @@ The `Pages` workflow does both on every push to `main` and deploys to the
 Pull requests must pass the `posture` check, which aggregates tests, Nix,
 golangci-lint (with gosec), govulncheck, actionlint and zizmor, shellcheck,
 gitleaks and nixfmt (see [SECURITY.md](SECURITY.md)).
+
+### Versioning and releases
+
+`search` follows strict [Semantic Versioning 2.0.0](https://semver.org). The
+version lives in [`VERSION`](VERSION), which feeds the Nix package, the
+release binaries and `search --version`.
+
+- **PR titles** must be [Conventional Commits](https://www.conventionalcommits.org)
+  (`type(scope)!: description`), because PRs are squash-merged and the title
+  becomes the commit on `main`.
+- **The bump is fixed by the type.** Each PR must change `VERSION` by exactly
+  this step; the required `semver` check (`tools/semver`) fails otherwise:
+
+  | PR title | VERSION change |
+  | --- | --- |
+  | `feat!: …`, `fix(cli)!: …`, or a `BREAKING CHANGE:` footer | major (minor while `0.y.z`, or straight to `1.0.0`) |
+  | `feat: …` | minor (`1.4.2` → `1.5.0`) |
+  | `fix: …`, `perf: …`, `revert: …` | patch (`1.4.2` → `1.4.3`) |
+  | `build`, `chore`, `ci`, `docs`, `refactor`, `style`, `test` | none |
+
+- **Releases are automatic.** When a version bump reaches `main`, the
+  `Release` workflow tags `vX.Y.Z` and publishes the binaries. Versions with a
+  pre-release suffix (`1.0.0-rc.1`) are published as pre-releases.
+- **Dependabot PRs** are titled `chore(deps): …` and don't release. To ship a
+  dependency fix, for example a security update, retitle the PR `fix(deps): …`
+  and bump the patch version.
+
+Check locally with `go run ./tools/semver check -title "feat: x" -base 0.1.0 -head "$(cat VERSION)"`.
 
 When you update Go dependencies, refresh `vendorHash` in `nix/package.nix`
 (build once and copy the `got:` hash).

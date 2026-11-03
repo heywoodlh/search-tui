@@ -10,8 +10,10 @@ updates:
     groups:
       go:
         patterns: ["*"]
+    # Conventional Commit titles (chore(deps): ...) for the semver gate.
     commit-message:
-      prefix: "deps(go)"
+      prefix: chore
+      include: scope
 
   - package-ecosystem: github-actions
     directory: /
@@ -23,4 +25,5 @@ updates:
       actions:
         patterns: ["*"]
     commit-message:
-      prefix: "deps(actions)"
+      prefix: ci
+      include: scope

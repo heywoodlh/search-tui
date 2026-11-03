@@ -9,6 +9,7 @@ import (
 	"io"
 	"os"
 	"os/signal"
+	"runtime/debug"
 	"strings"
 	"text/tabwriter"
 	"time"
@@ -25,8 +26,19 @@ import (
 	flag "github.com/spf13/pflag"
 )
 
-// Version is set at build time.
+// Version is set at build time from the VERSION file (-ldflags -X). For
+// `go install module@vX.Y.Z` builds it falls back to the module version.
 var Version = "dev"
+
+func version() string {
+	if Version != "dev" {
+		return Version
+	}
+	if bi, ok := debug.ReadBuildInfo(); ok && bi.Main.Version != "" && bi.Main.Version != "(devel)" {
+		return strings.TrimPrefix(bi.Main.Version, "v")
+	}
+	return Version
+}
 
 type options struct {
 	engine, typ, lang, repo, config string
@@ -104,7 +116,7 @@ Flags:
 		return err
 	}
 	if o.version {
-		fmt.Fprintln(stdout, "search", Version)
+		fmt.Fprintln(stdout, "search", version())
 		return nil
 	}
 	if o.defCfg {

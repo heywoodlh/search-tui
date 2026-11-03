@@ -42,13 +42,9 @@ jobs:
         if: runner.os == 'Linux'
       - run: go test ./...
         if: runner.os != 'Linux'
-      - name: Cross-compile
+      - name: Release binaries build and are statically linked
         if: runner.os == 'Linux'
-        shell: bash
-        run: |
-          for t in linux/amd64 linux/arm64 darwin/arm64 windows/amd64 windows/arm64; do
-            GOOS=${t%/*} GOARCH=${t#*/} CGO_ENABLED=0 go build -o /dev/null ./cmd/search
-          done
+        run: scripts/build-release.sh "$RUNNER_TEMP/dist"
 
   nix:
     name: nix (${{ matrix.os }})

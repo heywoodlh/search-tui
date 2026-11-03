@@ -63,8 +63,9 @@ read-only token. Only separate jobs that never execute PR code can push to
 
 ### Enforcing the gate
 
-A repository admin enables enforcement once. This ruleset requires a pull
-request and a passing `posture` check before anything reaches `main`, and
+A repository admin enables enforcement once. This ruleset requires a
+squash-merged pull request with passing `posture` and `semver` checks (see
+"Versioning and releases" in the README) before anything reaches `main`, and
 blocks force-pushes and deletion:
 
 ```sh
@@ -78,6 +79,7 @@ gh api -X POST repos/heywoodlh/tui-search/rulesets --input - <<'JSON'
     { "type": "deletion" },
     { "type": "non_fast_forward" },
     { "type": "pull_request", "parameters": {
+        "allowed_merge_methods": ["squash"],
         "required_approving_review_count": 0,
         "dismiss_stale_reviews_on_push": true,
         "require_code_owner_review": false,
@@ -85,7 +87,9 @@ gh api -X POST repos/heywoodlh/tui-search/rulesets --input - <<'JSON'
         "required_review_thread_resolution": false } },
     { "type": "required_status_checks", "parameters": {
         "strict_required_status_checks_policy": true,
-        "required_status_checks": [ { "context": "posture", "integration_id": 15368 } ] } }
+        "required_status_checks": [
+          { "context": "posture", "integration_id": 15368 },
+          { "context": "semver", "integration_id": 15368 } ] } }
   ]
 }
 JSON

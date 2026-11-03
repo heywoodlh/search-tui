@@ -1,17 +1,26 @@
 name: Release
 
+# Publishes v<VERSION> when a commit on main carries a VERSION that has not
+# been released yet. PRs must bump VERSION according to strict SemVer (see
+# semver.yml), so merging a feat:/fix:/breaking PR releases it.
+
 on:
   push:
-    tags: ["v*"]
+    branches: [main]
+  workflow_dispatch:
 
 permissions: {}
+
+concurrency:
+  group: release
+  cancel-in-progress: false
 
 jobs:
   release:
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 30
     permissions:
-      contents: write # create the GitHub release
+      contents: write # create the tag and GitHub release
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -20,17 +29,36 @@ jobs:
         with:
           go-version-file: go.mod
           cache: false # never restore a (possibly poisoned) cache into a release build
-      - name: Build
-        run: |
-          mkdir dist
-          for t in linux/amd64 linux/arm64 darwin/arm64 windows/amd64 windows/arm64 freebsd/amd64; do
-            os=${t%/*}; arch=${t#*/}; ext=""; [ "$os" = windows ] && ext=.exe
-            GOOS=$os GOARCH=$arch CGO_ENABLED=0 go build -trimpath \
-              -ldflags "-s -w -X github.com/heywoodlh/tui-search/internal/cli.Version=${GITHUB_REF_NAME#v}" \
-              -o "dist/search-$os-$arch$ext" ./cmd/search
-          done
-          (cd dist && sha256sum -- * > SHA256SUMS)
-      - name: Publish
+
+      - name: Version
+        id: version
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh release create "$GITHUB_REF_NAME" dist/* --generate-notes --repo "$GITHUB_REPOSITORY"
+        run: |
+          version=$(tr -d '[:space:]' < VERSION)
+          go run ./tools/semver validate "$version"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          if gh release view "v$version" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            echo "v$version is already released; nothing to do."
+            echo "publish=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "publish=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Build and verify binaries
+        if: steps.version.outputs.publish == 'true'
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: scripts/build-release.sh dist "$VERSION"
+
+      - name: Publish
+        if: steps.version.outputs.publish == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          flags=()
+          # SemVer pre-releases (1.2.0-rc.1) are published as pre-releases.
+          [[ $VERSION == *-* ]] && flags+=(--prerelease)
+          gh release create "v$VERSION" dist/* --repo "$GITHUB_REPOSITORY" \
+            --target "$GITHUB_SHA" --title "v$VERSION" --generate-notes "${flags[@]}"

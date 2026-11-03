@@ -43,8 +43,18 @@ Needs Go 1.25 or newer. The binary is called search.
 
 <h2>Prebuilt binaries</h2>
 
-Tagged <a href="{{REPO}}/releases">releases</a> include static binaries for Linux and Windows (amd64, arm64), macOS (arm64) and FreeBSD, with SHA256SUMS. Download one, make it executable and put it on your PATH:
+Every <a href="{{REPO}}/releases">release</a> includes these binaries and a SHA256SUMS file:
 
+    Linux     amd64 arm64 armv6 riscv64   static, any distribution
+    FreeBSD   amd64 arm64                 static
+    NetBSD    amd64 arm64                 static
+    OpenBSD   amd64 arm64                 base-system libc only
+    macOS     arm64
+    Windows   amd64 arm64                 .exe
+
+OpenBSD requires system calls to go through its libc, so that build links the base-system libc, which every install has. Download a binary, make it executable and put it on your PATH:
+
+    curl -LO {{REPO}}/releases/latest/download/search-linux-amd64
     chmod +x search-linux-amd64 && mv search-linux-amd64 ~/.local/bin/search
 
 <h2>Windows</h2>

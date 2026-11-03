@@ -13,7 +13,8 @@
         "aarch64-darwin"
       ];
       forAllSystems = f: lib.genAttrs systems (system: f nixpkgs.legacyPackages.${system});
-      version = "0.1.0";
+      # Single source of truth for the version (strict SemVer, see tools/semver).
+      version = lib.trim (builtins.readFile ./VERSION);
     in
     {
       packages = forAllSystems (pkgs: {
