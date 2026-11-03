@@ -1,6 +1,7 @@
 package sys
 
 import (
+	"runtime"
 	"strings"
 	"testing"
 )
@@ -46,11 +47,16 @@ func TestBrowserCommand(t *testing.T) {
 }
 
 func TestBrowserPrecedence(t *testing.T) {
-	t.Setenv("BROWSER", "nonexistent-browser-xyz:sh")
-	if got := BrowserCommand("", "https://x"); strings.Join(got, " ") != "sh https://x" {
+	// $BROWSER is a PATH-style list: ":" separated, ";" on Windows.
+	sep, cmd := ":", "sh"
+	if runtime.GOOS == "windows" {
+		sep, cmd = ";", "cmd"
+	}
+	t.Setenv("BROWSER", "nonexistent-browser-xyz"+sep+cmd)
+	if got := BrowserCommand("", "https://x"); strings.Join(got, " ") != cmd+" https://x" {
 		t.Errorf("$BROWSER list: %q", got)
 	}
-	if got := BrowserCommand("default", "https://x"); got[len(got)-1] != "https://x" || got[0] == "sh" {
+	if got := BrowserCommand("default", "https://x"); got[len(got)-1] != "https://x" || got[0] == cmd {
 		t.Errorf("default should ignore $BROWSER: %q", got)
 	}
 	t.Setenv("BROWSER", "")
