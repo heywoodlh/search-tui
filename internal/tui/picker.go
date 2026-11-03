@@ -159,10 +159,7 @@ func (m *Model) pickerLines() []string {
 		info := m.app.Reg.Info(n)
 		mark := "  "
 		if n == cur {
-			mark = "✓ "
-			if m.app.Cfg.UI.ASCII {
-				mark = "* "
-			}
+			mark = m.st.check + " "
 		}
 		kinds := make([]string, len(info.Kinds))
 		for j, k := range info.Kinds {
@@ -176,18 +173,21 @@ func (m *Model) pickerLines() []string {
 		extra := fmt.Sprintf("  %-5s %s", bangs, strings.Join(kinds, "/"))
 		row := ansi.Truncate(mark+name+extra, maxW-2, "…")
 		row += strings.Repeat(" ", max(maxW-2-lipgloss.Width(row), 0))
+		rest := strings.TrimPrefix(row, mark+name)
 		if i == m.picker.idx {
-			row = m.st.badge.UnsetPadding().Render(row)
+			// Highlight with colour and a pointer only: no background fill.
+			row = m.st.selTitle.Render(mark+name) + m.st.accent.UnsetBold().Render(rest)
+			rows = append(rows, m.st.bar.Render(m.st.pointer)+row+" ")
 		} else {
-			row = mark + m.st.title.Render(name) + m.st.muted.Render(strings.TrimPrefix(row, mark+name))
+			row = mark + m.st.title.Render(name) + m.st.muted.Render(rest)
+			rows = append(rows, " "+row+" ")
 		}
-		rows = append(rows, " "+row+" ")
 	}
 	border := lipgloss.RoundedBorder()
 	if m.app.Cfg.UI.ASCII {
 		border = lipgloss.NormalBorder()
 	}
-	box := lipgloss.NewStyle().Border(border).BorderForeground(lipgloss.Color(m.app.Cfg.UI.AccentColor)).Render(strings.Join(rows, "\n"))
+	box := lipgloss.NewStyle().Border(border).BorderForeground(m.st.accentColor).Render(strings.Join(rows, "\n"))
 	return strings.Split(box, "\n")
 }
 

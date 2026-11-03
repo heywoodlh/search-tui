@@ -101,7 +101,7 @@ func New(a *app.App, query string, opts app.PlanOptions) *Model {
 	m := &Model{
 		app:         a,
 		keys:        km,
-		st:          newStyles(a.Cfg.UI),
+		st:          newStyles(a.Cfg.UI, a.Theme),
 		input:       ti,
 		spinner:     sp,
 		opts:        opts,
@@ -112,7 +112,6 @@ func New(a *app.App, query string, opts app.PlanOptions) *Model {
 		width:       80,
 		height:      24,
 	}
-	m.st.selTitle = m.st.selTitle.Inherit(m.st.title)
 	m.detail = viewport.New(0, 0)
 	m.help = viewport.New(0, 0)
 	notes := append([]string{}, a.Warnings...)

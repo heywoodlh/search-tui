@@ -67,9 +67,14 @@ type UI struct {
 	SnippetLines  int    `toml:"snippet_lines"`
 	StatusBar     *bool  `toml:"status_bar"`
 	ShowSummary   *bool  `toml:"show_summary"`
-	AccentColor   string `toml:"accent_color"`
-	MutedColor    string `toml:"muted_color"`
-	ASCII         bool   `toml:"ascii"`
+	// Theme is a built-in palette name (see `search --list-themes`).
+	Theme string `toml:"theme"`
+	// Colors overrides individual theme colours (hex or ANSI 0-255).
+	Colors map[string]string `toml:"colors"`
+	// AccentColor and MutedColor are shorthands for colors.accent / muted.
+	AccentColor string `toml:"accent_color"`
+	MutedColor  string `toml:"muted_color"`
+	ASCII       bool   `toml:"ascii"`
 }
 
 // Engine is the configuration of a single (built-in or custom) engine.
@@ -193,12 +198,6 @@ func (c *Config) applyDefaults() {
 	}
 	if c.UI.ShowSummary == nil {
 		c.UI.ShowSummary = boolp(!c.LowPower)
-	}
-	if c.UI.AccentColor == "" {
-		c.UI.AccentColor = "#ea580c"
-	}
-	if c.UI.MutedColor == "" {
-		c.UI.MutedColor = "244"
 	}
 	if c.Keys == nil {
 		c.Keys = map[string][]string{}

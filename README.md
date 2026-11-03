@@ -52,6 +52,13 @@ search -E                                # write the query in $EDITOR
 - **Credentials:** set them literally or with `*_env`, `*_file` or
   `*_command` (works with `pass`, `op`, `gh auth token`, agenix, sops-nix and
   so on).
+- **Themes:** about 20 built-in colour themes (Catppuccin, Dracula, Nord,
+  Gruvbox, Solarized, Tokyo Night, One Dark, Rosé Pine, Kanagawa, GitHub and
+  more), plus `ansi`, which follows your terminal's own palette. Themes only
+  change foreground colours and never paint the background.
+- **Browser choice:** set `browser`, or pass `--browser`, to pick the browser
+  for opening links. If it's unset, `$BROWSER` and then the system default
+  are used.
 - **Low-power mode:** `low_power = true` uses fewer results, smaller download
   caps, no spinner animation and the summary bar is off by default.
 - **Packaging:** a Nix flake and home-manager module for x86_64/aarch64 Linux
@@ -85,6 +92,8 @@ The flake provides `packages.<system>.default`, `overlays.default`,
         default_code_engine = "github";
         summary.sentences = 4;
         ui.layout = "auto";
+        ui.theme = "catppuccin-mocha";
+        browser = "firefox";
         keys.open = [ "o" "enter" ];
         bangs.nw = "https://wiki.nixos.org/w/index.php?search={query}";
         engines = {
@@ -132,6 +141,8 @@ search [flags] <query...>    search inline
   -u, --url             print the engine's search URL
   -i, --tui             open the TUI with the query
   -E, --compose         write the query in $EDITOR  --edit (results in $EDITOR)
+      --theme NAME      colour theme                --list-themes
+      --browser CMD     browser for opening URLs (overrides config)
       --list-engines    --list-bangs                --example-config
 ```
 
@@ -284,7 +295,7 @@ fallback_engine = "bing"         # "none" to disable
 results = 20
 timeout = "15s"
 low_power = false
-browser = ""                     # $BROWSER / xdg-open / open / termux-open-url; w3m & co. run in the TUI
+browser = ""                     # see "Browser" below; unset = $BROWSER, then the system default
 editor = ""                      # $VISUAL / $EDITOR
 clipboard = "auto"               # auto | osc52 | command | none
 
@@ -298,13 +309,64 @@ mouse = true
 layout = "auto"                  # auto | split | stacked
 split_min_width = 110
 snippet_lines = 2
-accent_color = "#ea580c"
+theme = "default"                # search --list-themes
+# colors = { accent = "#f5c2e7" } # per-colour overrides
 ascii = false
 ```
 
 Clipboard support: `auto` uses `wl-copy`, `xclip`/`xsel`, `pbcopy`, `clip`
 or `termux-clipboard-set` when it finds one. Otherwise it falls back to OSC 52,
 which works over SSH and inside tmux and screen. Over SSH it sends OSC 52 too.
+
+## Themes
+
+Set `ui.theme` (or pass `--theme`). `search --list-themes` prints every theme
+with a colour preview:
+
+`default`, `ansi` (uses your terminal's 16 colours, so it matches whatever
+theme your terminal emulator uses), `mono`, `catppuccin-mocha`,
+`catppuccin-macchiato`, `catppuccin-frappe`, `catppuccin-latte`, `dracula`,
+`nord`, `gruvbox-dark`, `gruvbox-light`, `solarized-dark`, `solarized-light`,
+`tokyo-night`, `tokyo-night-day`, `one-dark`, `one-light`, `monokai`,
+`everforest`, `rose-pine`, `rose-pine-dawn`, `kanagawa`, `github-dark` and
+`github-light`.
+
+Themes only set foreground colours and text attributes. The TUI never paints
+a background: the status bar, engine label, mode indicator, selection and
+engine picker all use coloured text, and the cursor is an underlined
+character rather than a reverse-video block. Your terminal's background,
+transparency and blur stay as they are. Pick a light theme (`*-latte`,
+`*-light`, `*-day`, `*-dawn`) on a light terminal background.
+
+You can override individual colours with hex or ANSI 0-255 values; an empty
+string means the terminal default:
+
+```toml
+[ui]
+theme = "nord"
+colors = { accent = "#ebcb8b", url = "4", text = "" }
+# keys: accent title text url muted border code key error success insert normal view
+```
+
+The older `accent_color` and `muted_color` keys still work as shorthands.
+
+## Browser
+
+Links open in, from highest priority:
+
+1. `--browser CMD`, then `browser = "..."` in the config. This is a command
+   line, with an optional `%s` or `{url}` placeholder (otherwise the URL is
+   appended), e.g. `"firefox --new-tab"` or `"chromium --incognito %s"`. On
+   macOS and Windows a bare application name also works:
+   `browser = "Google Chrome"` runs `open -a "Google Chrome"` or `start`.
+   `browser = "default"` forces the system default.
+2. `$BROWSER`, which may be a colon-separated list; the first one found is used.
+3. The system default: `xdg-open` on Linux and BSD, `open` on macOS, the
+   default browser on Windows, `termux-open-url` on Android/Termux and
+   `wslview` under WSL.
+
+Terminal browsers (`w3m`, `lynx`, `links`, `elinks`, `browsh`, `carbonyl`,
+`chawan`) take over the terminal and return you to the TUI when they exit.
 
 ## How summaries work
 

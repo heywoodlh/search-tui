@@ -16,6 +16,7 @@ import (
 	"github.com/heywoodlh-bot/tui-search/internal/config"
 	"github.com/heywoodlh-bot/tui-search/internal/engine"
 	"github.com/heywoodlh-bot/tui-search/internal/summary"
+	"github.com/heywoodlh-bot/tui-search/internal/theme"
 )
 
 // App is the shared application core.
@@ -25,6 +26,8 @@ type App struct {
 	Bangs *bang.Resolver
 	// Warnings are non-fatal configuration problems to show the user.
 	Warnings []string
+	// Theme is the resolved colour theme.
+	Theme theme.Theme
 
 	mu    sync.Mutex
 	pages map[string]Page
@@ -45,7 +48,11 @@ func New(cfg *config.Config) (*App, error) {
 		warnings = append(warnings, fmt.Sprintf("default_engine %s is not configured (set %s); using duckduckgo", u.Name, u.Missing))
 		cfg.DefaultEngine = "duckduckgo"
 	}
-	return &App{Cfg: cfg, Reg: reg, Bangs: bang.NewResolver(reg, cfg.Bangs), Warnings: warnings, pages: map[string]Page{}}, nil
+	th, err := theme.Resolve(cfg.UI.Theme, ThemeOverrides(cfg.UI))
+	if err != nil {
+		warnings = append(warnings, err.Error())
+	}
+	return &App{Cfg: cfg, Reg: reg, Bangs: bang.NewResolver(reg, cfg.Bangs), Warnings: warnings, Theme: th, pages: map[string]Page{}}, nil
 }
 
 // Plan is a resolved search request.
@@ -297,4 +304,21 @@ func SnippetText(r engine.Result) string {
 		return strings.Join(parts, "\n\n")
 	}
 	return r.Snippet
+}
+
+// ThemeOverrides merges [ui.colors] with the accent_color/muted_color
+// shorthands.
+func ThemeOverrides(ui config.UI) map[string]string {
+	o := map[string]string{}
+	if ui.AccentColor != "" {
+		o["accent"] = ui.AccentColor
+	}
+	if ui.MutedColor != "" {
+		o["muted"] = ui.MutedColor
+		o["border"] = ui.MutedColor
+	}
+	for k, v := range ui.Colors {
+		o[k] = v
+	}
+	return o
 }

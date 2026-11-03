@@ -46,11 +46,13 @@ in
           default_engine = "kagi";
           default_code_engine = "github";
           results = 15;
+          browser = "firefox";
           low_power = false;
           summary.sentences = 4;
           ui = {
             layout = "auto";
-            accent_color = "#7aa2f7";
+            theme = "tokyo-night";
+            colors.accent = "#7aa2f7";
           };
           keys = {
             open = [ "o" "enter" ];

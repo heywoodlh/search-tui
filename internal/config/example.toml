@@ -13,7 +13,10 @@ timeout = "15s"
 low_power = false                 # fewer results, smaller downloads, no animations
 # region = "us-en"                # engine-specific region code
 # safe_search = "moderate"        # strict | moderate | off
-# browser = "firefox"             # default: $BROWSER, xdg-open/open/termux-open-url; "w3m" etc. run in the terminal
+# browser = "firefox"             # command (optionally with %s or {url}); on macOS/Windows an app name
+#                                 # like "Firefox" works. Unset: $BROWSER, then the system default
+#                                 # (xdg-open / open / Windows default / Termux). "default" forces the
+#                                 # system default. Terminal browsers (w3m, lynx, ...) run inside the TUI.
 # editor = "nvim"                 # default: $VISUAL, $EDITOR
 clipboard = "auto"                # auto | osc52 | command | none
 # clipboard_command = "wl-copy"
@@ -32,8 +35,11 @@ split_min_width = 110             # auto layout uses a preview pane from this wi
 snippet_lines = 2
 status_bar = true
 show_summary = true
-accent_color = "#ea580c"
-muted_color = "244"
+theme = "default"                 # see `search --list-themes`; "ansi" follows your terminal's palette
+# Themes only change foreground colours; the terminal background is never painted.
+# Override individual colours (hex or ANSI 0-255; "" = terminal default):
+# colors = { accent = "#f5c2e7", url = "4" }
+# Keys: accent title text url muted border code key error success insert normal view
 ascii = false                     # avoid non-ASCII glyphs in the UI
 
 # Keybindings: action = [keys]. Unlisted actions keep their defaults.

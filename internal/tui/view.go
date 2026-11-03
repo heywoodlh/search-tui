@@ -470,11 +470,12 @@ func (m *Model) badgeText() string {
 	if m.width < 40 && len(label) > 10 {
 		label = label[:10]
 	}
-	return m.st.badge.Render(label)
+	return m.st.badge.Render(label) + " " + m.st.muted.Render(m.st.sep)
 }
 
 func (m *Model) viewHeader(l layoutInfo) string {
-	line := m.badgeText() + " " + m.input.View()
+	badge := m.badgeText() + " "
+	line := badge + m.inputView(m.width-lipgloss.Width(badge)-1)
 	line = ansi.Truncate(line, m.width, "")
 	if l.inputH > 1 {
 		return line + "\n" + m.st.border.Render(strings.Repeat("─", max(m.width, 1)))
@@ -539,13 +540,13 @@ func (m *Model) viewStatus() string {
 	var modeBadge string
 	switch m.mode {
 	case modeInsert:
-		modeBadge = m.st.modeIns.Render("INS")
+		modeBadge = m.st.modeIns.Render(" INS")
 	case modeDetail:
-		modeBadge = m.st.modeDet.Render("VIEW")
+		modeBadge = m.st.modeDet.Render(" VIEW")
 	case modeHelp:
-		modeBadge = m.st.modeDet.Render("HELP")
+		modeBadge = m.st.modeDet.Render(" HELP")
 	default:
-		modeBadge = m.st.modeNorm.Render("NOR")
+		modeBadge = m.st.modeNorm.Render(" NOR")
 	}
 	bar := m.st.statusBar
 	left := modeBadge
@@ -607,9 +608,9 @@ func (m *Model) renderHints(hs [][2]string, avail int) string {
 	var out string
 	w := 0
 	for _, h := range hs {
-		seg := bar.Render(" ") + m.st.key.Inherit(bar).Render(h[0])
+		seg := bar.Render(" ") + m.st.key.Render(h[0])
 		if h[1] != "" {
-			seg += bar.Render(" " + h[1])
+			seg += m.st.muted.Render(" " + h[1])
 		}
 		sw := lipgloss.Width(seg)
 		if w+sw+1 > avail {
@@ -633,4 +634,41 @@ func displayURL(u string) string {
 		s += "?" + p.RawQuery
 	}
 	return strings.TrimSuffix(s, "/")
+}
+
+// inputView renders the search bar. The bubbles cursor uses reverse video
+// (a background fill), so the cursor is drawn as an underlined accent
+// character instead, keeping the terminal background untouched.
+func (m *Model) inputView(width int) string {
+	width = max(width, 1)
+	val := []rune(m.input.Value())
+	focused := m.input.Focused()
+	cursor := m.st.accent.Underline(true)
+	if len(val) == 0 {
+		ph := []rune(m.input.Placeholder)
+		if len(ph) > width {
+			ph = append(ph[:max(width-1, 0)], '…')
+		}
+		if !focused || len(ph) == 0 {
+			return m.st.muted.Render(string(ph))
+		}
+		return cursor.Render(string(ph[:1])) + m.st.muted.Render(string(ph[1:]))
+	}
+	pos := min(m.input.Position(), len(val))
+	start := 0
+	if pos >= width {
+		start = pos - width + 1
+	}
+	end := min(start+width, len(val))
+	text := m.st.snippet
+	if !focused {
+		return text.Render(string(val[start:end]))
+	}
+	before := string(val[start:pos])
+	at, after := " ", ""
+	if pos < len(val) {
+		at = string(val[pos])
+		after = string(val[pos+1 : end])
+	}
+	return text.Render(before) + cursor.Render(at) + text.Render(after)
 }

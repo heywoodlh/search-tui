@@ -18,6 +18,7 @@ import (
 	"github.com/heywoodlh-bot/tui-search/internal/config"
 	"github.com/heywoodlh-bot/tui-search/internal/engine"
 	"github.com/heywoodlh-bot/tui-search/internal/sys"
+	"github.com/heywoodlh-bot/tui-search/internal/theme"
 	"github.com/heywoodlh-bot/tui-search/internal/tui"
 	flag "github.com/spf13/pflag"
 )
@@ -27,6 +28,8 @@ var Version = "dev"
 
 type options struct {
 	engine, typ, lang, repo, config string
+	theme, browser                  string
+	listThemes                      bool
 	code, jsonOut, md, open, lucky  bool
 	printURL, tui, compose, edit    bool
 	summary, noSummary, noColor     bool
@@ -66,6 +69,9 @@ func run(args []string, stdout, stderr io.Writer) error {
 	fs.BoolVarP(&o.summary, "summary", "s", false, "print the on-device summary")
 	fs.BoolVar(&o.noSummary, "no-summary", false, "do not print a summary")
 	fs.BoolVar(&o.noColor, "no-color", false, "disable colours")
+	fs.StringVar(&o.theme, "theme", "", "colour theme (see --list-themes)")
+	fs.StringVar(&o.browser, "browser", "", "browser command for opening URLs (default: config, $BROWSER, then the system default)")
+	fs.BoolVar(&o.listThemes, "list-themes", false, "list colour themes and exit")
 	fs.StringVar(&o.config, "config", "", "config file (default "+config.DefaultPath()+")")
 	fs.BoolVar(&o.listEngines, "list-engines", false, "list engines and exit")
 	fs.BoolVar(&o.listBangs, "list-bangs", false, "list bangs and exit")
@@ -111,6 +117,12 @@ Flags:
 	if err != nil {
 		return err
 	}
+	if o.theme != "" {
+		cfg.UI.Theme = o.theme
+	}
+	if o.browser != "" {
+		cfg.Browser = o.browser
+	}
 	a, err := app.New(cfg)
 	if err != nil {
 		return err
@@ -119,6 +131,9 @@ Flags:
 		for _, w := range a.Warnings {
 			fmt.Fprintln(stderr, "search: warning:", w)
 		}
+	}
+	if o.listThemes {
+		return listThemes(stdout, cfg.UI.Theme)
 	}
 	if o.listEngines {
 		return listEngines(a, stdout)
@@ -241,7 +256,7 @@ Flags:
 		}
 		return viewInEditor(cfg, "results.md", md, 0)
 	}
-	printResults(stdout, plan, rs, sum, showSummary)
+	printResults(stdout, a.Theme, plan, rs, sum, showSummary)
 	return nil
 }
 
@@ -318,14 +333,14 @@ func termWidth() int {
 	return 80
 }
 
-func printResults(w io.Writer, plan app.Plan, rs []engine.Result, sum app.Summary, showSummary bool) {
+func printResults(w io.Writer, th theme.Theme, plan app.Plan, rs []engine.Result, sum app.Summary, showSummary bool) {
 	width := termWidth()
-	accent := lipgloss.NewStyle().Foreground(lipgloss.Color("#ea580c")).Bold(true)
-	title := lipgloss.NewStyle().Bold(true)
-	link := lipgloss.NewStyle().Foreground(lipgloss.Color("39"))
-	muted := lipgloss.NewStyle().Foreground(lipgloss.Color("244"))
-	code := lipgloss.NewStyle().Foreground(lipgloss.Color("150"))
-	wrap := lipgloss.NewStyle().Width(max(width-4, 20))
+	accent := theme.Fg(th.Accent).Bold(true)
+	title := theme.Fg(th.Title).Bold(true)
+	link := theme.Fg(th.URL)
+	muted := theme.Fg(th.Muted)
+	code := theme.Fg(th.Code)
+	wrap := theme.Fg(th.Text).Width(max(width-4, 20))
 
 	if len(rs) == 0 {
 		fmt.Fprintln(w, muted.Render("No results."))
@@ -390,4 +405,24 @@ func truncate(s string, n int) string {
 		return string(r[:n-1]) + "…"
 	}
 	return s
+}
+
+// listThemes prints every theme with a colour preview.
+func listThemes(w io.Writer, current string) error {
+	cur, _ := theme.Get(current)
+	for _, n := range theme.Names() {
+		t, _ := theme.Get(n)
+		mark := "  "
+		if n == cur.Name {
+			mark = "* "
+		}
+		preview := theme.Fg(t.Accent).Bold(true).Render("accent") + " " +
+			theme.Fg(t.Title).Bold(true).Render("title") + " " +
+			theme.Fg(t.URL).Render("url") + " " +
+			theme.Fg(t.Code).Render("code") + " " +
+			theme.Fg(t.Muted).Render("muted") + " " +
+			theme.Fg(t.Error).Render("error")
+		fmt.Fprintf(w, "%s%-22s %s\n", mark, n, preview)
+	}
+	return nil
 }

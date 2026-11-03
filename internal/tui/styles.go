@@ -3,45 +3,51 @@ package tui
 import (
 	"github.com/charmbracelet/lipgloss"
 	"github.com/heywoodlh-bot/tui-search/internal/config"
+	"github.com/heywoodlh-bot/tui-search/internal/theme"
 )
 
+// styles only ever set foreground colours and text attributes, never a
+// background, so the terminal's own background is always preserved.
 type styles struct {
 	accent, title, selTitle, url, meta, snippet, muted, code, lineNo lipgloss.Style
 	err, ok, badge, modeIns, modeNorm, modeDet, statusBar, key       lipgloss.Style
 	border, sumTitle, bar                                            lipgloss.Style
-	selBar, bullet                                                   string
+	accentColor                                                      lipgloss.TerminalColor
+	selBar, bullet, sep, check, pointer                              string
 }
 
-func newStyles(ui config.UI) styles {
-	accent := lipgloss.Color(ui.AccentColor)
-	muted := lipgloss.Color(ui.MutedColor)
+func newStyles(ui config.UI, t theme.Theme) styles {
+	fg := theme.Fg
 	s := styles{
-		accent:    lipgloss.NewStyle().Foreground(accent).Bold(true),
-		title:     lipgloss.NewStyle().Bold(true),
-		selTitle:  lipgloss.NewStyle().Bold(true).Foreground(accent),
-		url:       lipgloss.NewStyle().Foreground(lipgloss.AdaptiveColor{Light: "25", Dark: "39"}),
-		meta:      lipgloss.NewStyle().Foreground(muted).Italic(true),
-		snippet:   lipgloss.NewStyle(),
-		muted:     lipgloss.NewStyle().Foreground(muted),
-		code:      lipgloss.NewStyle().Foreground(lipgloss.AdaptiveColor{Light: "28", Dark: "150"}),
-		lineNo:    lipgloss.NewStyle().Foreground(muted),
-		err:       lipgloss.NewStyle().Foreground(lipgloss.Color("203")).Bold(true),
-		ok:        lipgloss.NewStyle().Foreground(lipgloss.Color("78")),
-		badge:     lipgloss.NewStyle().Foreground(lipgloss.Color("231")).Background(accent).Padding(0, 1).Bold(true),
-		modeIns:   lipgloss.NewStyle().Foreground(lipgloss.Color("16")).Background(lipgloss.Color("78")).Padding(0, 1).Bold(true),
-		modeNorm:  lipgloss.NewStyle().Foreground(lipgloss.Color("16")).Background(lipgloss.Color("75")).Padding(0, 1).Bold(true),
-		modeDet:   lipgloss.NewStyle().Foreground(lipgloss.Color("16")).Background(lipgloss.Color("219")).Padding(0, 1).Bold(true),
-		statusBar: lipgloss.NewStyle().Foreground(lipgloss.AdaptiveColor{Light: "236", Dark: "252"}).Background(lipgloss.AdaptiveColor{Light: "254", Dark: "236"}),
-		key:       lipgloss.NewStyle().Foreground(accent).Bold(true),
-		border:    lipgloss.NewStyle().Foreground(muted),
-		sumTitle:  lipgloss.NewStyle().Foreground(accent).Bold(true),
-		bar:       lipgloss.NewStyle().Foreground(accent),
-		selBar:    "▌",
-		bullet:    "•",
+		accent:      fg(t.Accent).Bold(true),
+		title:       fg(t.Title).Bold(true),
+		selTitle:    fg(t.Accent).Bold(true),
+		url:         fg(t.URL),
+		meta:        fg(t.Muted).Italic(true),
+		snippet:     fg(t.Text),
+		muted:       fg(t.Muted),
+		code:        fg(t.Code),
+		lineNo:      fg(t.Muted),
+		err:         fg(t.Error).Bold(true),
+		ok:          fg(t.Success),
+		badge:       fg(t.Accent).Bold(true),
+		modeIns:     fg(t.Insert).Bold(true),
+		modeNorm:    fg(t.Normal).Bold(true),
+		modeDet:     fg(t.View).Bold(true),
+		statusBar:   fg(t.Text),
+		key:         fg(t.Key).Bold(true),
+		border:      fg(t.Border),
+		sumTitle:    fg(t.Accent).Bold(true),
+		bar:         fg(t.Accent),
+		accentColor: t.Accent,
+		selBar:      "▌",
+		bullet:      "•",
+		sep:         "›",
+		check:       "✓",
+		pointer:     "▸",
 	}
 	if ui.ASCII {
-		s.selBar = ">"
-		s.bullet = "*"
+		s.selBar, s.bullet, s.sep, s.check, s.pointer = ">", "*", ">", "*", ">"
 	}
 	return s
 }

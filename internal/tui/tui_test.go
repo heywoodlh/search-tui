@@ -1,6 +1,8 @@
 package tui
 
 import (
+	"regexp"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -9,6 +11,8 @@ import (
 	"github.com/heywoodlh-bot/tui-search/internal/app"
 	"github.com/heywoodlh-bot/tui-search/internal/config"
 	"github.com/heywoodlh-bot/tui-search/internal/engine"
+	"github.com/heywoodlh-bot/tui-search/internal/theme"
+	"github.com/muesli/termenv"
 )
 
 func testModel(t *testing.T) *Model {
@@ -231,5 +235,72 @@ func TestEnginePicker(t *testing.T) {
 	send(m, kp("tab"))
 	if !m.picker.open {
 		t.Error("tab in the search bar should open the picker")
+	}
+}
+
+func TestThemesNeverSetBackground(t *testing.T) {
+	lipgloss.SetColorProfile(termenv.TrueColor)
+	defer lipgloss.SetColorProfile(termenv.Ascii)
+	for _, name := range theme.Names() {
+		cfg := config.Default()
+		cfg.UI.Theme = name
+		a, err := app.New(cfg)
+		if err != nil {
+			t.Fatal(err)
+		}
+		m := New(a, "", app.PlanOptions{})
+		plan, _ := a.Plan("kubernetes", app.PlanOptions{})
+		m.plan = plan
+		m.setResults([]engine.Result{{Title: "T", URL: "https://x", Snippet: "Kubernetes automates deployment of containerized applications today.", Meta: "m"}})
+		send(m, tea.WindowSizeMsg{Width: 120, Height: 30})
+		for _, mode := range []mode{modeInsert, modeNormal, modeDetail, modeHelp} {
+			m.mode = mode
+			views := []string{m.View()}
+			m.mode = modeNormal
+			m.openPicker(0)
+			views = append(views, m.View())
+			m.closePicker()
+			for _, out := range views {
+				if setsBackground(out) {
+					t.Fatalf("theme %s mode %d sets a background:\n%q", name, mode, out)
+				}
+			}
+		}
+		if name == "dracula" && !strings.Contains(m.View(), "38;2;") {
+			t.Error("expected truecolor foreground output for dracula")
+		}
+	}
+}
+
+// setsBackground parses SGR sequences and reports background colours
+// (40-49, 100-107, 48;…) or reverse video (7).
+func setsBackground(s string) bool {
+	for _, seq := range regexp.MustCompile(`\x1b\[([0-9;]*)m`).FindAllStringSubmatch(s, -1) {
+		ps := strings.Split(seq[1], ";")
+		for i := 0; i < len(ps); i++ {
+			n, _ := strconv.Atoi(ps[i])
+			switch {
+			case n == 38: // foreground: skip its arguments
+				if i+1 < len(ps) && ps[i+1] == "5" {
+					i += 2
+				} else if i+1 < len(ps) && ps[i+1] == "2" {
+					i += 4
+				}
+			case n == 7, n >= 40 && n <= 48, n >= 100 && n <= 107:
+				return true
+			}
+		}
+	}
+	return false
+}
+
+func TestSetsBackgroundDetector(t *testing.T) {
+	for s, want := range map[string]bool{
+		"\x1b[48;2;1;2;3mx": true, "\x1b[1;44mx": true, "\x1b[7mx": true, "\x1b[101mx": true,
+		"\x1b[38;2;48;54;60mx": false, "\x1b[38;5;48mx": false, "\x1b[1;4;35mx": false,
+	} {
+		if setsBackground(s) != want {
+			t.Errorf("setsBackground(%q) != %v", s, want)
+		}
 	}
 }

@@ -44,3 +44,17 @@ func TestBrowserCommand(t *testing.T) {
 		t.Error("w3m is a terminal browser")
 	}
 }
+
+func TestBrowserPrecedence(t *testing.T) {
+	t.Setenv("BROWSER", "nonexistent-browser-xyz:sh")
+	if got := BrowserCommand("", "https://x"); strings.Join(got, " ") != "sh https://x" {
+		t.Errorf("$BROWSER list: %q", got)
+	}
+	if got := BrowserCommand("default", "https://x"); got[len(got)-1] != "https://x" || got[0] == "sh" {
+		t.Errorf("default should ignore $BROWSER: %q", got)
+	}
+	t.Setenv("BROWSER", "")
+	if got := BrowserCommand("", "https://x"); got[0] == "" || got[len(got)-1] != "https://x" {
+		t.Errorf("system default: %q", got)
+	}
+}

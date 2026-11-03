@@ -93,11 +93,23 @@ func copyOSC52(text string) error {
 }
 
 // BrowserCommand returns the command used to open a URL.
+//
+// Precedence: configured command, then $BROWSER, then the system default.
+// configured may be "default" (or "system") to force the system default,
+// a command line (with optional %s or {url} placeholder), or on macOS and
+// Windows just an application name such as "Firefox" or "Google Chrome".
 func BrowserCommand(configured, url string) []string {
-	if configured == "" {
-		configured = os.Getenv("BROWSER")
+	configured = strings.TrimSpace(configured)
+	switch strings.ToLower(configured) {
+	case "default", "system":
+		return systemBrowser(url)
+	case "":
+		configured = envBrowser()
 	}
 	if configured != "" {
+		if args := appBrowser(configured, url); args != nil {
+			return args
+		}
 		args := SplitCommand(configured)
 		replaced := false
 		for i, a := range args {
@@ -111,6 +123,52 @@ func BrowserCommand(configured, url string) []string {
 		}
 		return args
 	}
+	return systemBrowser(url)
+}
+
+// envBrowser returns the first usable entry of $BROWSER, which may be a
+// colon-separated list (the xdg convention).
+func envBrowser() string {
+	v := os.Getenv("BROWSER")
+	if v == "" {
+		return ""
+	}
+	sep := ":"
+	if runtime.GOOS == "windows" {
+		sep = ";"
+	}
+	for _, c := range strings.Split(v, sep) {
+		if args := SplitCommand(c); len(args) > 0 {
+			if _, err := exec.LookPath(args[0]); err == nil {
+				return c
+			}
+		}
+	}
+	return ""
+}
+
+// appBrowser maps a bare application name that is not an executable on
+// PATH to the platform launcher ("open -a" on macOS, "start" on Windows).
+func appBrowser(name, url string) []string {
+	if strings.ContainsAny(name, "%{/\\") || strings.HasPrefix(name, "-") {
+		return nil
+	}
+	if args := SplitCommand(name); len(args) > 0 {
+		if _, err := exec.LookPath(args[0]); err == nil {
+			return nil
+		}
+	}
+	switch runtime.GOOS {
+	case "darwin":
+		return []string{"open", "-a", name, url}
+	case "windows":
+		return []string{"cmd", "/c", "start", "", name, url}
+	}
+	return nil
+}
+
+// systemBrowser opens url with the platform default handler.
+func systemBrowser(url string) []string {
 	switch runtime.GOOS {
 	case "darwin":
 		return []string{"open", url}
