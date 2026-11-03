@@ -23,7 +23,7 @@ func newStyles(ui config.UI, t theme.Theme) styles {
 		title:       fg(t.Title).Bold(true),
 		selTitle:    fg(t.Accent).Bold(true),
 		url:         fg(t.URL),
-		meta:        fg(t.Muted).Italic(true),
+		meta:        fg(t.Muted), // no italics: some terminals (tmux on screen-256color) render them as reverse video
 		snippet:     fg(t.Text),
 		muted:       fg(t.Muted),
 		code:        fg(t.Code),

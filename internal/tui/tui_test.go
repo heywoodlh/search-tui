@@ -304,3 +304,15 @@ func TestSetsBackgroundDetector(t *testing.T) {
 		}
 	}
 }
+
+func TestPickerLetterJumpG(t *testing.T) {
+	m := testModel(t)
+	send(m, tea.WindowSizeMsg{Width: 100, Height: 30}, kp("tab"), kp("g"))
+	if got := m.picker.items[m.picker.idx]; got != "github" {
+		t.Errorf("g should jump to github, got %s", got)
+	}
+	send(m, kp("h"))
+	if got := m.picker.items[m.picker.idx]; got != "hackernews" || !m.picker.open {
+		t.Errorf("h should jump to hackernews and keep the picker open, got %s", got)
+	}
+}

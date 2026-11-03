@@ -24,7 +24,7 @@ jobs:
               -ldflags "-s -w -X github.com/heywoodlh-bot/tui-search/internal/cli.Version=${GITHUB_REF_NAME#v}" \
               -o "dist/search-$os-$arch$ext" ./cmd/search
           done
-          (cd dist && sha256sum * > SHA256SUMS)
+          (cd dist && sha256sum -- * > SHA256SUMS)
       - name: Publish
         env:
           GH_TOKEN: ${{ github.token }}

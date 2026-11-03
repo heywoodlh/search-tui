@@ -576,7 +576,7 @@ func (m *Model) viewStatus() string {
 
 func (m *Model) statusHints() [][2]string {
 	if m.picker.open {
-		return [][2]string{{"↑↓/jk/tab", "move"}, {"enter", "select"}, {"esc", "close"}, {"a-z", "jump"}}
+		return [][2]string{{"↑↓/jk/tab", "move"}, {"enter", "select"}, {"esc", "close"}, {"letter", "jump"}}
 	}
 	switch m.mode {
 	case modeInsert:

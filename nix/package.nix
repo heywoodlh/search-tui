@@ -33,7 +33,7 @@ buildGoModule {
   meta = {
     description = "Terminal UI and CLI for web and code search engines";
     homepage = "https://github.com/heywoodlh-bot/tui-search";
-    license = lib.licenses.mit;
+    license = lib.licenses.gpl3Only;
     mainProgram = "search";
     platforms = lib.platforms.unix ++ lib.platforms.windows;
   };

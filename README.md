@@ -2,6 +2,8 @@
 
 # tui-search
 
+Website: <https://heywoodlh-bot.github.io/tui-search/> (also readable with `curl`).
+
 `search` is a fast terminal client for web and code search. It has a full
 TUI and an inline CLI, DuckDuckGo-style `!bangs`, and summaries computed on
 your device. It also integrates with `$EDITOR`. It is a single static Go
@@ -11,7 +13,7 @@ a phone (Termux), over SSH or in tmux, and on a full-size monitor.
 ```sh
 search                                   # open the TUI
 search "nixos flakes tutorial"           # inline results + summary
-search !w alan turing                    # bangs work inline too
+search '!w alan turing'                  # bangs work inline (single-quote ! in bash/zsh)
 search --engine gh --code --lang go "tea.NewProgram"
 search -E                                # write the query in $EDITOR
 ```
@@ -403,9 +405,25 @@ Layout: `cmd/search` (entry point), `internal/cli` (flags, inline output),
 `internal/sys` (clipboard/browser/editor), `internal/config`, and `nix/`
 (package and home-manager module).
 
+### Website and demo
+
+The site lives in `site/`. Pages are plain-text fragments in `site/pages/`, so
+`curl` output stays readable, and `site/build.sh` wraps them in a small
+template. The demo is recorded by `demo/record.sh`, which drives the real TUI
+in tmux under a headless asciinema 3 session:
+
+```sh
+nix shell .#default nixpkgs#asciinema nixpkgs#tmux -c demo/record.sh /tmp/demo.cast
+site/build.sh /tmp/_site http://localhost:8000/ /tmp/demo.cast
+```
+
+The `Pages` workflow does both on every push to `main` and deploys to the
+`gh-pages` branch. For every pull request it deploys a preview to
+`pr-preview/pr-N/` and comments the URL on the PR.
+
 When you update Go dependencies, refresh `vendorHash` in `nix/package.nix`
 (build once and copy the `got:` hash).
 
 ## License
 
-MIT
+[GPL-3.0-only](LICENSE). Copyright (C) 2026 Spencer Heywood.

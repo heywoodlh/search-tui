@@ -211,3 +211,11 @@ type = "searxng"
 		t.Error("custom searxng without base_url should be unconfigured")
 	}
 }
+
+func TestStripMarkdown(t *testing.T) {
+	in := "## Summary\n<!-- template -->\nThis **adds** a [link](https://x) and `code`.\n- [x] done\n- item\n> quote"
+	got := CleanText(stripMarkdown(in))
+	if got != "Summary This adds a link and code. done item quote" {
+		t.Errorf("got %q", got)
+	}
+}

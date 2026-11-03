@@ -82,11 +82,11 @@ func run(args []string, stdout, stderr io.Writer) error {
 
 Usage:
   search                       open the TUI
-  search [flags] <query...>    search inline (supports !bangs, e.g. "!gh bubbletea")
+  search [flags] <query...>    search inline (supports !bangs, e.g. '!gh bubbletea')
 
 Examples:
   search "nixos flakes tutorial"
-  search !w alan turing
+  search '!w alan turing'      quote !bangs: bash/zsh expand ! in history
   search --engine gh --code "tea.NewProgram" --lang go
   search -c -r charmbracelet/bubbletea WithMouseCellMotion
   search -E                    write the query in $EDITOR

@@ -11,6 +11,7 @@ import (
 	"os"
 	"os/exec"
 	"path"
+	"regexp"
 	"strings"
 	"sync"
 	"time"
@@ -240,7 +241,7 @@ func (g *GitHub) issues(ctx context.Context, v url.Values) ([]Result, error) {
 		rs = append(rs, Result{
 			Title:   it.Title,
 			URL:     it.HTMLURL,
-			Snippet: trunc(CleanText(it.Body), 400),
+			Snippet: trunc(CleanText(stripMarkdown(it.Body)), 400),
 			Meta:    fmt.Sprintf("%s%s %s · %d comments · @%s", repo, it.State, kind, it.Comments, it.User.Login),
 			Engine:  g.name,
 		})
@@ -344,7 +345,7 @@ func (g *GitLab) Search(ctx context.Context, q Query) ([]Result, error) {
 		}
 		var rs []Result
 		for _, it := range items {
-			rs = append(rs, Result{Title: it.Title, URL: it.WebURL, Snippet: trunc(CleanText(it.Description), 400), Meta: it.State, Engine: g.name})
+			rs = append(rs, Result{Title: it.Title, URL: it.WebURL, Snippet: trunc(CleanText(stripMarkdown(it.Description)), 400), Meta: it.State, Engine: g.name})
 		}
 		return rs, nil
 	default:
@@ -730,4 +731,20 @@ func Focus(f Fragment, query string, maxLines int) Fragment {
 		out.Line = f.Line + start
 	}
 	return out
+}
+
+var (
+	mdLinkRE    = regexp.MustCompile(`!?\[([^\]]*)\]\([^)]*\)`)
+	mdMarkerRE  = regexp.MustCompile("(?m)^\\s{0,3}(#{1,6}\\s+|>\\s?|[-*+]\\s+\\[[ xX]\\]\\s+|[-*+]\\s+|\\d+\\.\\s+)")
+	mdEmphRE    = regexp.MustCompile("(\\*\\*|__|~~|`{1,3})")
+	mdCommentRE = regexp.MustCompile(`(?s)<!--.*?-->`)
+)
+
+// stripMarkdown reduces Markdown (issue/PR bodies) to plain prose.
+func stripMarkdown(s string) string {
+	s = mdCommentRE.ReplaceAllString(s, " ")
+	s = mdLinkRE.ReplaceAllString(s, "$1")
+	s = mdMarkerRE.ReplaceAllString(s, "")
+	s = mdEmphRE.ReplaceAllString(s, "")
+	return s
 }

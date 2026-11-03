@@ -1,0 +1,88 @@
+name: Pages
+
+# main      -> build the site and deploy it to the root of the gh-pages branch
+# PR        -> deploy a preview to gh-pages:/pr-preview/pr-N/ and comment the URL
+# PR closed -> remove that preview
+#
+# GitHub Pages must be set to "Deploy from a branch: gh-pages / (root)".
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    types: [opened, reopened, synchronize, closed]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
+
+concurrency:
+  group: pages-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  site:
+    if: github.event.action != 'closed'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: cachix/install-nix-action@v31
+
+      - name: Site URL
+        id: url
+        run: |
+          owner="${GITHUB_REPOSITORY%%/*}"
+          base="https://${owner}.github.io/${GITHUB_REPOSITORY#*/}/"
+          if [ "${{ github.event_name }}" = pull_request ]; then
+            base="${base}pr-preview/pr-${{ github.event.pull_request.number }}/"
+          fi
+          echo "base=$base" >> "$GITHUB_OUTPUT"
+
+      # Record the demo with the code from this commit. A failed recording
+      # (e.g. a search engine rate-limiting the runner) must not block the site.
+      - name: Record demo
+        id: demo
+        continue-on-error: true
+        timeout-minutes: 10
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          nix shell --inputs-from . .#default nixpkgs#asciinema nixpkgs#tmux \
+            -c demo/record.sh "$RUNNER_TEMP/demo.cast"
+
+      - name: Build site
+        run: |
+          args=(_site "${{ steps.url.outputs.base }}")
+          [ -s "$RUNNER_TEMP/demo.cast" ] && args+=("$RUNNER_TEMP/demo.cast")
+          site/build.sh "${args[@]}"
+
+      - name: Deploy
+        if: github.event_name != 'pull_request'
+        uses: JamesIves/github-pages-deploy-action@v4
+        with:
+          folder: _site
+          branch: gh-pages
+          clean-exclude: pr-preview/
+          force: false
+
+      - name: Deploy preview and comment
+        if: github.event_name == 'pull_request'
+        uses: rossjrw/pr-preview-action@v1
+        with:
+          source-dir: _site
+          preview-branch: gh-pages
+          umbrella-dir: pr-preview
+          action: deploy
+
+  remove-preview:
+    if: github.event_name == 'pull_request' && github.event.action == 'closed'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: rossjrw/pr-preview-action@v1
+        with:
+          preview-branch: gh-pages
+          umbrella-dir: pr-preview
+          action: remove

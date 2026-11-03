@@ -1,0 +1,9 @@
+# Configuration used for the website demo recording.
+results = 10
+fallback_engine = "bing"
+
+[summary]
+sentences = 2
+
+[ui]
+split_min_width = 100

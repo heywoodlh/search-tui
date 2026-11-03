@@ -78,18 +78,20 @@ func (m *Model) pickerKey(msg tea.KeyMsg) tea.Cmd {
 		m.pickerMove(1)
 	case "up", "k", "shift+tab", "ctrl+p":
 		m.pickerMove(-1)
-	case "g", "home":
+	case "home":
 		m.picker.idx = 0
-	case "G", "end":
+	case "end":
 		m.picker.idx = len(m.picker.items) - 1
-	case "enter", "l", "right", " ":
+	case "enter", "right", " ":
 		name := m.picker.items[m.picker.idx]
 		m.closePicker()
 		return m.selectEngine(name)
-	case "esc", "q", "h", "left":
+	case "esc", "left":
 		m.closePicker()
 	default:
-		// Type a letter to jump to the next engine starting with it.
+		// Any other letter jumps to the next engine starting with it (only j/k
+		// are reserved for movement, so e.g. g, h and l reach github,
+		// hackernews and others).
 		if r := msg.Runes; len(r) == 1 {
 			n := len(m.picker.items)
 			for i := 1; i <= n; i++ {
