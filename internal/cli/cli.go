@@ -115,6 +115,11 @@ Flags:
 	if err != nil {
 		return err
 	}
+	if !o.tui && len(fs.Args()) > 0 || o.listEngines {
+		for _, w := range a.Warnings {
+			fmt.Fprintln(stderr, "search: warning:", w)
+		}
+	}
 	if o.listEngines {
 		return listEngines(a, stdout)
 	}
@@ -262,7 +267,16 @@ func listEngines(a *app.App, w io.Writer) error {
 		}
 		fmt.Fprintf(tw, "%s%s\t!%s\t%s\t%s\t%s\n", n, def, strings.Join(info.Bangs, " !"), strings.Join(ks, ","), auth, info.Description)
 	}
-	return tw.Flush()
+	if err := tw.Flush(); err != nil {
+		return err
+	}
+	if un := a.Reg.Unconfigured(); len(un) > 0 {
+		fmt.Fprintln(w, "\nHidden until configured (their bangs open the site in a browser):")
+		for _, u := range un {
+			fmt.Fprintf(w, "  %-12s set [engines.%s] %s\n", u.Name, u.Name, u.Missing)
+		}
+	}
+	return nil
 }
 
 func composeQuery(cfg *config.Config, initial string) (string, error) {

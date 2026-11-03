@@ -259,12 +259,13 @@ func (m *Model) viewEmpty(l layoutInfo) string {
 			m.st.accent.Render("search") + m.st.muted.Render(" — type a query and press enter"),
 			"",
 			m.st.muted.Render("Bangs pick an engine:"),
-			"  !g google   !ddg duckduckgo   !b bing   !k kagi",
-			"  !w wikipedia   !so stackoverflow   !hn hackernews",
+			"  !ddg duckduckgo   !b bing   !w wikipedia",
+			"  !so stackoverflow   !hn hackernews",
 			"  !gh repos   !ghc code   !ghi issues   !sg sourcegraph",
 			"  !yt !aw !nix !hm !mdn … open in your browser",
+			"  !g !k !br search in-app once configured, else open the site",
 			"",
-			m.st.muted.Render("tab cycles engines · ctrl+e writes the query in $EDITOR · esc then ? for help"),
+			m.st.muted.Render("tab picks an engine · ctrl+e writes the query in $EDITOR · esc then ? for help"),
 		}
 		for _, t := range tips {
 			lines = append(lines, "  "+ansi.Truncate(t, max(w-2, 1), "…"))
@@ -425,8 +426,12 @@ func (m *Model) refreshHelp() {
 	}
 	b = append(b, "",
 		m.st.accent.Render("Insert mode"),
-		"enter search · esc normal mode · tab complete !bang / next engine",
-		"↑/↓ history · ctrl+e compose in $EDITOR",
+		"enter search · esc back to results / normal mode · ↑/↓ history",
+		"tab complete !bang, otherwise open the engine picker · ctrl+e compose in $EDITOR",
+		"",
+		m.st.accent.Render("Engine picker"),
+		"↑/↓, j/k or tab/shift+tab move · enter select · letter jumps · esc close",
+		"Engines that need credentials appear once configured (search --list-engines)",
 		"",
 		m.st.accent.Render("Mouse"),
 		"wheel scrolls · click selects · click again for details · click query to edit",
@@ -485,6 +490,7 @@ func (m *Model) View() string {
 	if len(lines) > m.height {
 		lines = lines[:m.height]
 	}
+	lines = m.overlayPicker(lines)
 	return strings.Join(lines, "\n")
 }
 
@@ -568,6 +574,9 @@ func (m *Model) viewStatus() string {
 }
 
 func (m *Model) statusHints() [][2]string {
+	if m.picker.open {
+		return [][2]string{{"↑↓/jk/tab", "move"}, {"enter", "select"}, {"esc", "close"}, {"a-z", "jump"}}
+	}
 	switch m.mode {
 	case modeInsert:
 		v := m.input.Value()
@@ -584,7 +593,7 @@ func (m *Model) statusHints() [][2]string {
 				return append([][2]string{{"tab", "complete"}}, hs...)
 			}
 		}
-		return [][2]string{{"enter", "search"}, {"esc", "normal"}, {"tab", "engine"}, {"ctrl+e", "editor"}, {"↑↓", "history"}, {"ctrl+c", "quit"}}
+		return [][2]string{{"enter", "search"}, {"esc", "normal"}, {"tab", "engines"}, {"ctrl+e", "editor"}, {"↑↓", "history"}, {"ctrl+c", "quit"}}
 	case modeDetail:
 		return append([][2]string{{m.keys.first(ActBack), "back"}, {"enter", "open"}}, m.keys.hints(ActEdit, ActSummarizePage, ActYankURL, ActYankSnippet, ActHelp)...)
 	case modeHelp:

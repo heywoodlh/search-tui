@@ -179,3 +179,35 @@ func TestGitHubAuthError(t *testing.T) {
 		t.Errorf("want AuthError, got %v", err)
 	}
 }
+
+func TestUnconfiguredHidden(t *testing.T) {
+	t.Setenv("TS_BRAVE", "k")
+	cfg, _ := config.Parse(`
+[engines.brave]
+api_key_env = "TS_BRAVE"
+[engines.kagi]
+token_command = "pass show kagi"
+[engines.mysx]
+type = "searxng"
+`)
+	reg, err := NewRegistry(cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, n := range []string{"brave", "kagi"} {
+		if _, ok := reg.Get(n); !ok {
+			t.Errorf("%s is configured and should be available", n)
+		}
+	}
+	for _, n := range []string{"google", "g", "mojeek", "searxng", "mysx"} {
+		if _, ok := reg.Get(n); ok {
+			t.Errorf("%s should be hidden", n)
+		}
+	}
+	if u, ok := reg.UnconfiguredByName("g"); !ok || u.Name != "google" || u.URL == "" {
+		t.Errorf("google should be listed as unconfigured: %+v", u)
+	}
+	if _, ok := reg.UnconfiguredByName("mysx"); !ok {
+		t.Error("custom searxng without base_url should be unconfigured")
+	}
+}

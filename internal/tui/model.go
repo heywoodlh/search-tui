@@ -42,11 +42,13 @@ type Model struct {
 	width, height int
 	mode, prev    mode
 
-	opts    app.PlanOptions
-	plan    app.Plan
-	results []engine.Result
-	sel     int
-	offset  int
+	opts     app.PlanOptions
+	initOpts app.PlanOptions // restored when esc returns to the start page
+	picker   picker
+	plan     app.Plan
+	results  []engine.Result
+	sel      int
+	offset   int
 
 	summary     app.Summary
 	showSummary bool
@@ -86,7 +88,7 @@ func Run(a *app.App, query string, opts app.PlanOptions) error {
 func New(a *app.App, query string, opts app.PlanOptions) *Model {
 	km, unknown := newKeyMap(a.Cfg.Keys)
 	ti := textinput.New()
-	ti.Placeholder = "Search… (!bangs: !g !gh !ghc !w !so — ? for help)"
+	ti.Placeholder = "Search… (!bangs: !w !gh !ghc !so · tab: engines)"
 	ti.Prompt = ""
 	ti.CharLimit = 2048
 	ti.SetValue(query)
@@ -103,6 +105,7 @@ func New(a *app.App, query string, opts app.PlanOptions) *Model {
 		input:       ti,
 		spinner:     sp,
 		opts:        opts,
+		initOpts:    opts,
 		showSummary: *a.Cfg.UI.ShowSummary && a.Cfg.SummaryEnabled(),
 		pages:       map[string]app.Page{},
 		pageErrs:    map[string]error{},
@@ -112,9 +115,11 @@ func New(a *app.App, query string, opts app.PlanOptions) *Model {
 	m.st.selTitle = m.st.selTitle.Inherit(m.st.title)
 	m.detail = viewport.New(0, 0)
 	m.help = viewport.New(0, 0)
+	notes := append([]string{}, a.Warnings...)
 	if len(unknown) > 0 {
-		m.flash = "unknown [keys] actions: " + strings.Join(unknown, ", ")
+		notes = append(notes, "unknown [keys] actions: "+strings.Join(unknown, ", "))
 	}
+	m.flash = strings.Join(notes, "; ")
 	return m
 }
 
@@ -344,42 +349,6 @@ func (m *Model) setResults(rs []engine.Result) {
 	}
 }
 
-func (m *Model) engineCycle(dir int) tea.Cmd {
-	names := []string{}
-	for _, n := range m.app.Reg.Names() {
-		if !m.app.Reg.Info(n).BrowserOnly {
-			names = append(names, n)
-		}
-	}
-	if len(names) == 0 {
-		return nil
-	}
-	cur := ""
-	if m.plan.Engine != nil {
-		cur = m.plan.Engine.Name()
-	} else {
-		cur = m.app.Cfg.DefaultEngine
-	}
-	idx := 0
-	for i, n := range names {
-		if n == cur {
-			idx = i
-		}
-	}
-	idx = (idx + dir + len(names)) % len(names)
-	m.opts.Engine = names[idx]
-	e, _ := m.app.Reg.Get(names[idx])
-	if m.opts.Kind != "" && !e.Supports(m.opts.Kind) {
-		m.opts.Kind = ""
-	}
-	m.stripBang()
-	if strings.TrimSpace(m.input.Value()) == "" {
-		return m.setFlash("engine: " + names[idx])
-	}
-	m.opts.Page = 1
-	return m.search(m.input.Value())
-}
-
 func (m *Model) typeCycle() tea.Cmd {
 	cur := m.plan.Query.Kind
 	if cur == "" {
@@ -561,6 +530,9 @@ func (m *Model) handleKey(msg tea.KeyMsg) tea.Cmd {
 	if msg.String() == "ctrl+c" {
 		return tea.Quit
 	}
+	if m.picker.open {
+		return m.pickerKey(msg)
+	}
 	switch m.mode {
 	case modeHelp:
 		switch {
@@ -582,8 +554,13 @@ func (m *Model) handleKey(msg tea.KeyMsg) tea.Cmd {
 		case "enter":
 			return m.submit()
 		case "esc":
+			// Back to the results (or, on the start page, to normal mode so
+			// ? and other bindings work).
 			m.mode = modeNormal
 			m.input.Blur()
+			return nil
+		case "ctrl+l":
+			m.input.CursorEnd()
 			return nil
 		case "ctrl+e":
 			return m.compose()
@@ -591,9 +568,11 @@ func (m *Model) handleKey(msg tea.KeyMsg) tea.Cmd {
 			if m.completeBang() {
 				return nil
 			}
-			return m.engineCycle(1)
+			m.openPicker(0)
+			return nil
 		case "shift+tab":
-			return m.engineCycle(-1)
+			m.openPicker(0)
+			return nil
 		case "up", "ctrl+p":
 			if m.histIdx > 0 {
 				m.histIdx--
@@ -638,10 +617,11 @@ func (m *Model) handleKey(msg tea.KeyMsg) tea.Cmd {
 	case k.is(msg, ActCompose):
 		return m.compose()
 	case k.is(msg, ActBack):
+		return m.back()
+	case k.is(msg, ActCloseDetails):
 		if m.mode == modeDetail {
 			m.mode = modeNormal
 		}
-		m.err = nil
 		return nil
 	}
 
@@ -749,9 +729,9 @@ func (m *Model) handleKey(msg tea.KeyMsg) tea.Cmd {
 			return m.rerunPage()
 		}
 	case k.is(msg, ActNextEngine):
-		return m.engineCycle(1)
+		m.openPicker(0)
 	case k.is(msg, ActPrevEngine):
-		return m.engineCycle(-1)
+		m.openPicker(0)
 	case k.is(msg, ActCycleType):
 		return m.typeCycle()
 	case k.is(msg, ActRefresh):
@@ -801,6 +781,9 @@ func (m *Model) move(d int) {
 }
 
 func (m *Model) handleMouse(msg tea.MouseMsg) tea.Cmd {
+	if m.picker.open {
+		return m.pickerMouse(msg)
+	}
 	l := m.layout()
 	inPreview := l.previewW > 0 && msg.X >= l.listW
 	switch msg.Button {
@@ -879,4 +862,38 @@ func truncate(s string, n int) string {
 		return string(r[:n-1]) + "…"
 	}
 	return s
+}
+
+// back steps out one level: details → results → start page (no results,
+// empty search bar). On the start page it toggles between the search bar
+// and normal mode.
+func (m *Model) back() tea.Cmd {
+	switch {
+	case m.mode == modeDetail:
+		m.mode = modeNormal
+	case len(m.results) > 0 || m.plan.Engine != nil || m.err != nil || m.loading:
+		m.reset()
+	default:
+		m.mode = modeInsert
+		m.input.Focus()
+		return textinput.Blink
+	}
+	return nil
+}
+
+// reset returns to the start page.
+func (m *Model) reset() {
+	if m.cancel != nil {
+		m.cancel()
+	}
+	m.searchID++ // ignore in-flight results
+	m.loading, m.busy, m.err = false, "", nil
+	m.plan = app.Plan{}
+	m.opts = m.initOpts
+	m.setResults(nil)
+	m.histIdx = len(m.history)
+	m.input.SetValue("")
+	m.mode = modeInsert
+	m.input.Focus()
+	m.refreshDetail()
 }

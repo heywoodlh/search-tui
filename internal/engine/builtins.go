@@ -6,6 +6,12 @@ import (
 
 type builtin struct {
 	info Info
+	// ready reports whether required configuration is present (nil: always);
+	// hint names what is missing.
+	ready func(ec *config.Engine) bool
+	hint  string
+	// web is a browser URL template used by the bangs of unconfigured engines.
+	web string
 	// typ is an extra type alias custom engines may use (e.g. "forgejo").
 	typ  string
 	make func(c *Client, ec *config.Engine) Engine
@@ -23,7 +29,10 @@ var builtins = []builtin{
 		},
 	},
 	{
-		info: Info{Name: "google", Description: "Google Programmable Search API", Bangs: []string{"g", "google"}, Kinds: []Kind{KindWeb}, Auth: "required"},
+		info:  Info{Name: "google", Description: "Google Programmable Search API", Bangs: []string{"g", "google"}, Kinds: []Kind{KindWeb}, Auth: "required"},
+		ready: func(ec *config.Engine) bool { return ec.HasSecret("api_key") && ec.HasSecret("cx") },
+		hint:  "api_key and cx",
+		web:   "https://www.google.com/search?q={query}",
 		make: func(c *Client, ec *config.Engine) Engine {
 			return &Google{base: mk("google", c, ec, KindWeb), safe: c.SafeSearch}
 		},
@@ -35,25 +44,36 @@ var builtins = []builtin{
 		},
 	},
 	{
-		info: Info{Name: "kagi", Description: "Kagi (API key or session token)", Bangs: []string{"k", "kagi"}, Kinds: []Kind{KindWeb}, Auth: "required"},
+		info:  Info{Name: "kagi", Description: "Kagi (API key or session token)", Bangs: []string{"k", "kagi"}, Kinds: []Kind{KindWeb}, Auth: "required"},
+		ready: func(ec *config.Engine) bool { return ec.HasSecret("api_key") || ec.HasSecret("token") },
+		hint:  "api_key or token",
+		web:   "https://kagi.com/search?q={query}",
 		make: func(c *Client, ec *config.Engine) Engine {
 			return &Kagi{base: mk("kagi", c, ec, KindWeb)}
 		},
 	},
 	{
-		info: Info{Name: "brave", Description: "Brave Search API", Bangs: []string{"br", "brave"}, Kinds: []Kind{KindWeb}, Auth: "required"},
+		info:  Info{Name: "brave", Description: "Brave Search API", Bangs: []string{"br", "brave"}, Kinds: []Kind{KindWeb}, Auth: "required"},
+		ready: func(ec *config.Engine) bool { return ec.HasSecret("api_key") },
+		hint:  "api_key",
+		web:   "https://search.brave.com/search?q={query}",
 		make: func(c *Client, ec *config.Engine) Engine {
 			return &Brave{base: mk("brave", c, ec, KindWeb), safe: c.SafeSearch}
 		},
 	},
 	{
-		info: Info{Name: "mojeek", Description: "Mojeek (API key recommended)", Bangs: []string{"m", "mojeek"}, Kinds: []Kind{KindWeb}, Auth: "optional"},
+		info:  Info{Name: "mojeek", Description: "Mojeek Search API", Bangs: []string{"m", "mojeek"}, Kinds: []Kind{KindWeb}, Auth: "required"},
+		ready: func(ec *config.Engine) bool { return ec.HasSecret("api_key") },
+		hint:  "api_key",
+		web:   "https://www.mojeek.com/search?q={query}",
 		make: func(c *Client, ec *config.Engine) Engine {
 			return &Mojeek{base: mk("mojeek", c, ec, KindWeb), safe: c.SafeSearch}
 		},
 	},
 	{
-		info: Info{Name: "searxng", Description: "SearXNG instance (set base_url)", Bangs: []string{"sx", "searx", "searxng"}, Kinds: []Kind{KindWeb}, Auth: "optional"},
+		info:  Info{Name: "searxng", Description: "SearXNG instance (set base_url)", Bangs: []string{"sx", "searx", "searxng"}, Kinds: []Kind{KindWeb}, Auth: "optional"},
+		ready: func(ec *config.Engine) bool { return ec.BaseURL != "" },
+		hint:  "base_url",
 		make: func(c *Client, ec *config.Engine) Engine {
 			return &SearXNG{base: mk("searxng", c, ec, KindWeb)}
 		},

@@ -70,3 +70,14 @@ func TestFindLineAndMarkdown(t *testing.T) {
 		t.Error("SnippetText should return code")
 	}
 }
+
+func TestUnconfiguredDefaultAndBang(t *testing.T) {
+	a := newApp(t, `default_engine = "kagi"`)
+	if a.Cfg.DefaultEngine != "duckduckgo" || len(a.Warnings) != 1 {
+		t.Errorf("expected fallback with warning: %q %v", a.Cfg.DefaultEngine, a.Warnings)
+	}
+	p, _ := a.Plan("!g golang", PlanOptions{})
+	if p.OpenURL != "https://www.google.com/search?q=golang" {
+		t.Errorf("unconfigured !g should open the browser, got %+v", p)
+	}
+}

@@ -23,6 +23,8 @@ type App struct {
 	Cfg   *config.Config
 	Reg   *engine.Registry
 	Bangs *bang.Resolver
+	// Warnings are non-fatal configuration problems to show the user.
+	Warnings []string
 
 	mu    sync.Mutex
 	pages map[string]Page
@@ -34,10 +36,16 @@ func New(cfg *config.Config) (*App, error) {
 	if err != nil {
 		return nil, err
 	}
+	var warnings []string
 	if _, ok := reg.Get(cfg.DefaultEngine); !ok {
-		return nil, fmt.Errorf("default_engine %q is not a known engine", cfg.DefaultEngine)
+		u, hidden := reg.UnconfiguredByName(cfg.DefaultEngine)
+		if !hidden {
+			return nil, fmt.Errorf("default_engine %q is not a known engine", cfg.DefaultEngine)
+		}
+		warnings = append(warnings, fmt.Sprintf("default_engine %s is not configured (set %s); using duckduckgo", u.Name, u.Missing))
+		cfg.DefaultEngine = "duckduckgo"
 	}
-	return &App{Cfg: cfg, Reg: reg, Bangs: bang.NewResolver(reg, cfg.Bangs), pages: map[string]Page{}}, nil
+	return &App{Cfg: cfg, Reg: reg, Bangs: bang.NewResolver(reg, cfg.Bangs), Warnings: warnings, pages: map[string]Page{}}, nil
 }
 
 // Plan is a resolved search request.

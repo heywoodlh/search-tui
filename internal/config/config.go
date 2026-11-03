@@ -381,3 +381,23 @@ func ExpandHome(p string) string {
 	}
 	return p
 }
+
+// HasSecret reports whether a credential source is configured, without
+// resolving it (so password managers are not invoked just to check).
+func (e *Engine) HasSecret(name string) bool {
+	if e == nil {
+		return false
+	}
+	var lit, env, file, cmd string
+	switch name {
+	case "api_key":
+		lit, env, file, cmd = e.APIKey, e.APIKeyEnv, e.APIKeyFile, e.APIKeyCommand
+	case "token":
+		lit, env, file, cmd = e.Token, e.TokenEnv, e.TokenFile, e.TokenCommand
+	case "password":
+		lit, env, file, cmd = e.Password, e.PasswordEnv, e.PasswordFile, e.PasswordCommand
+	case "cx":
+		lit, env, file, cmd = e.CX, e.CXEnv, e.CXFile, e.CXCommand
+	}
+	return lit != "" || (env != "" && os.Getenv(env) != "") || file != "" || cmd != ""
+}

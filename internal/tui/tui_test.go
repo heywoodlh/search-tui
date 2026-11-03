@@ -42,6 +42,14 @@ func kp(s string) tea.KeyMsg {
 		return tea.KeyMsg{Type: tea.KeyEnter}
 	case "esc":
 		return tea.KeyMsg{Type: tea.KeyEsc}
+	case "tab":
+		return tea.KeyMsg{Type: tea.KeyTab}
+	case "shift+tab":
+		return tea.KeyMsg{Type: tea.KeyShiftTab}
+	case "ctrl+l":
+		return tea.KeyMsg{Type: tea.KeyCtrlL}
+	case "down":
+		return tea.KeyMsg{Type: tea.KeyDown}
 	}
 	return tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune(s)}
 }
@@ -134,5 +142,94 @@ func TestCustomKeys(t *testing.T) {
 	}
 	if !m.keys.is(kp("x"), ActDown) || m.keys.is(kp("j"), ActDown) {
 		t.Error("override not applied")
+	}
+}
+
+func TestEscBackChain(t *testing.T) {
+	m := testModel(t)
+	m.input.SetValue("kubernetes")
+	send(m, tea.WindowSizeMsg{Width: 80, Height: 24})
+	send(m, kp("enter")) // details
+	if m.mode != modeDetail {
+		t.Fatal("expected details")
+	}
+	send(m, kp("esc"))
+	if m.mode != modeNormal || len(m.results) == 0 {
+		t.Fatal("esc from details should return to results")
+	}
+	send(m, kp("esc"))
+	if len(m.results) != 0 || m.plan.Engine != nil || m.input.Value() != "" || m.mode != modeInsert {
+		t.Fatalf("esc from results should reach the start page: mode=%d results=%d input=%q", m.mode, len(m.results), m.input.Value())
+	}
+	send(m, kp("esc"))
+	if m.mode != modeNormal {
+		t.Error("esc on start page should leave the search bar")
+	}
+	send(m, kp("esc"))
+	if m.mode != modeInsert {
+		t.Error("esc again should refocus the search bar")
+	}
+}
+
+func TestCtrlLFocusesSearch(t *testing.T) {
+	for _, start := range []mode{modeNormal, modeDetail} {
+		m := testModel(t)
+		m.mode = start
+		send(m, tea.WindowSizeMsg{Width: 80, Height: 24}, kp("ctrl+l"))
+		if m.mode != modeInsert || !m.input.Focused() {
+			t.Errorf("ctrl+l from mode %d did not focus the search bar", start)
+		}
+	}
+}
+
+func TestEnginePicker(t *testing.T) {
+	m := testModel(t)
+	send(m, tea.WindowSizeMsg{Width: 100, Height: 30})
+	send(m, kp("tab"))
+	if !m.picker.open {
+		t.Fatal("tab should open the picker")
+	}
+	for _, n := range m.picker.items {
+		if n == "google" || n == "kagi" || n == "brave" {
+			t.Errorf("unconfigured engine %s listed", n)
+		}
+	}
+	start := m.picker.idx
+	if m.picker.items[start] != "duckduckgo" {
+		t.Errorf("picker should start on the current engine, got %s", m.picker.items[start])
+	}
+	send(m, kp("tab"), kp("j"), kp("down"), kp("k"))
+	if m.picker.idx != (start+2)%len(m.picker.items) {
+		t.Errorf("picker idx = %d, want %d", m.picker.idx, start+2)
+	}
+	out := m.View()
+	if !strings.Contains(out, "wikipedia") || !strings.Contains(out, "sourcegraph") {
+		t.Error("picker not rendered")
+	}
+	for i, l := range strings.Split(out, "\n") {
+		if w := lipgloss.Width(l); w > 100 {
+			t.Errorf("line %d too wide (%d)", i, w)
+		}
+	}
+	send(m, kp("w")) // jump
+	if m.picker.items[m.picker.idx] != "wikipedia" {
+		t.Errorf("letter jump landed on %s", m.picker.items[m.picker.idx])
+	}
+	m.input.SetValue("")
+	send(m, kp("enter"))
+	if m.picker.open || m.opts.Engine != "wikipedia" {
+		t.Errorf("enter should select: open=%v engine=%q", m.picker.open, m.opts.Engine)
+	}
+	send(m, kp("tab"), kp("esc"))
+	if m.picker.open || m.opts.Engine != "wikipedia" {
+		t.Error("esc should close the picker without changing engine")
+	}
+	// From the search bar too.
+	m.mode = modeInsert
+	m.input.Focus()
+	m.input.SetValue("abc")
+	send(m, kp("tab"))
+	if !m.picker.open {
+		t.Error("tab in the search bar should open the picker")
 	}
 }

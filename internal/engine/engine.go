@@ -127,6 +127,9 @@ type Registry struct {
 	engines map[string]Engine
 	infos   map[string]Info
 	aliases map[string]string
+	// unready holds engines that need configuration that is missing; they
+	// are hidden from listings, cycling and bang resolution.
+	unready map[string]Unconfigured
 }
 
 // NewRegistry builds all built-in and configured custom engines.
@@ -137,6 +140,7 @@ func NewRegistry(cfg *config.Config) (*Registry, error) {
 		engines: map[string]Engine{},
 		infos:   map[string]Info{},
 		aliases: map[string]string{},
+		unready: map[string]Unconfigured{},
 	}
 	for _, b := range builtins {
 		ec := cfg.EngineConfig(b.info.Name)
@@ -145,6 +149,10 @@ func NewRegistry(cfg *config.Config) (*Registry, error) {
 		}
 		if ec.Type != "" && ec.Type != b.info.Name {
 			continue // overridden by a custom definition below
+		}
+		if b.ready != nil && !b.ready(ec) {
+			r.unready[b.info.Name] = Unconfigured{Name: b.info.Name, Missing: b.hint, URL: b.web, Bangs: append(append([]string{}, b.info.Bangs...), ec.Bangs...)}
+			continue
 		}
 		r.add(b.info, b.make(r.client, ec), ec.Bangs)
 	}
@@ -161,7 +169,15 @@ func NewRegistry(cfg *config.Config) (*Registry, error) {
 		if _, ok := r.engines[name]; ok {
 			continue
 		}
+		if _, ok := r.unready[name]; ok {
+			continue
+		}
 		e, info, err := newCustom(r.client, name, ec)
+		var nr *notReadyError
+		if errors.As(err, &nr) {
+			r.unready[name] = Unconfigured{Name: name, Missing: nr.missing, Bangs: ec.Bangs}
+			continue
+		}
 		if err != nil {
 			return nil, fmt.Errorf("engine %q: %w", name, err)
 		}
@@ -288,4 +304,42 @@ func trimResults(rs []Result, n int) []Result {
 		return rs[:n]
 	}
 	return rs
+}
+
+// Unconfigured describes an engine hidden because it lacks configuration.
+type Unconfigured struct {
+	Name    string
+	Missing string // what to set, e.g. "api_key and cx"
+	URL     string // browser search URL template ({query}), may be empty
+	Bangs   []string
+}
+
+type notReadyError struct{ missing string }
+
+func (e *notReadyError) Error() string { return "not configured: needs " + e.missing }
+
+// Unconfigured lists hidden engines, sorted by name.
+func (r *Registry) Unconfigured() []Unconfigured {
+	out := make([]Unconfigured, 0, len(r.unready))
+	for _, u := range r.unready {
+		out = append(out, u)
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].Name < out[j].Name })
+	return out
+}
+
+// UnconfiguredByName finds a hidden engine by name or bang.
+func (r *Registry) UnconfiguredByName(name string) (Unconfigured, bool) {
+	name = strings.ToLower(strings.TrimPrefix(strings.TrimSpace(name), "!"))
+	for _, u := range r.unready {
+		if u.Name == name {
+			return u, true
+		}
+		for _, b := range u.Bangs {
+			if strings.ToLower(b) == name {
+				return u, true
+			}
+		}
+	}
+	return Unconfigured{}, false
 }

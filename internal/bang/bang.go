@@ -133,6 +133,10 @@ func (r *Resolver) Resolve(b string) (Target, bool) {
 	if v, ok := kindBangs[b]; ok {
 		return r.parseValue(b, v)
 	}
+	// Engines hidden for lack of configuration still open in the browser.
+	if u, ok := r.reg.UnconfiguredByName(b); ok && u.URL != "" {
+		return Target{Bang: b, URL: u.URL}, true
+	}
 	if v, ok := URLBangs[b]; ok {
 		return Target{Bang: b, URL: v}, true
 	}
@@ -174,6 +178,16 @@ func (r *Resolver) List() []Entry {
 	for _, n := range r.reg.Names() {
 		for _, b := range r.reg.Info(n).Bangs {
 			m[strings.ToLower(b)] = n
+		}
+	}
+	for _, u := range r.reg.Unconfigured() {
+		if u.URL == "" {
+			continue
+		}
+		for _, b := range append([]string{u.Name}, u.Bangs...) {
+			if _, taken := m[strings.ToLower(b)]; !taken {
+				m[strings.ToLower(b)] = u.URL
+			}
 		}
 	}
 	for k, v := range r.custom {

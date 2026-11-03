@@ -20,6 +20,7 @@ const (
 	ActPageUp         Action = "page_up"
 	ActDetails        Action = "details"
 	ActBack           Action = "back"
+	ActCloseDetails   Action = "close_details"
 	ActOpen           Action = "open"
 	ActOpenSearchPage Action = "open_search_page"
 	ActSearch         Action = "search"
@@ -51,7 +52,7 @@ type actionDef struct {
 
 // actionDefs is ordered by status-bar priority.
 var actionDefs = []actionDef{
-	{ActSearch, []string{"/", "i"}, "edit query (insert mode)", "search"},
+	{ActSearch, []string{"/", "i", "ctrl+l"}, "edit query in the search bar (insert mode)", "search"},
 	{ActDetails, []string{"enter", "l", "right", " "}, "show result details / focus preview", "details"},
 	{ActOpen, []string{"o"}, "open result in browser", "open"},
 	{ActYankURL, []string{"y"}, "copy result URL", "yank"},
@@ -65,7 +66,8 @@ var actionDefs = []actionDef{
 	{ActBottom, []string{"G", "end"}, "last result", ""},
 	{ActPageDown, []string{"ctrl+d", "pgdown", "ctrl+f"}, "page down", ""},
 	{ActPageUp, []string{"ctrl+u", "pgup", "ctrl+b"}, "page up", ""},
-	{ActBack, []string{"esc", "h", "left"}, "back", "back"},
+	{ActBack, []string{"esc"}, "back: details → results → start page", "back"},
+	{ActCloseDetails, []string{"h", "left"}, "close details", ""},
 	{ActYankSnippet, []string{"Y"}, "copy snippet / code fragment", "copy code"},
 	{ActYankMarkdown, []string{"M"}, "copy result as Markdown link", ""},
 	{ActEditResults, []string{"E"}, "open all results as Markdown in $EDITOR", ""},
@@ -74,8 +76,8 @@ var actionDefs = []actionDef{
 	{ActToggleSummary, []string{"S"}, "toggle results summary", ""},
 	{ActNextPage, []string{"n", "]"}, "next results page", "next pg"},
 	{ActPrevPage, []string{"N", "["}, "previous results page", ""},
-	{ActNextEngine, []string{"tab"}, "next engine (re-runs query)", "engine"},
-	{ActPrevEngine, []string{"shift+tab"}, "previous engine", ""},
+	{ActNextEngine, []string{"tab"}, "engine picker (press again to move down)", "engines"},
+	{ActPrevEngine, []string{"shift+tab"}, "engine picker (move up)", ""},
 	{ActCycleType, []string{"t"}, "cycle search type (web/code/repos/issues)", "type"},
 	{ActRefresh, []string{"r", "ctrl+r"}, "re-run search", ""},
 }

@@ -141,12 +141,13 @@ Queries can also come from stdin: `echo "rust lifetimes" | search -m`.
 
 | Keys | Action |
 | --- | --- |
-| `/`, `i` | edit the query (insert mode) |
+| `/`, `i`, `ctrl+l` | jump to the search bar to edit the query (like a browser URL bar) |
 | `enter`, `l`, `→`, `space` | result details (in the details view, `enter` opens the browser) |
 | `j`/`k`, `↓`/`↑` | move down/up, or scroll |
 | `g`/`G`, `home`/`end` | first/last result |
 | `ctrl+d`/`ctrl+u`, `pgdn`/`pgup` | page down/up |
-| `esc`, `h`, `←` | back |
+| `esc` | back: details → results → start page (no results) |
+| `h`, `←` | close the details view |
 | `o` / `O` | open the result / the engine's search page in the browser |
 | `y` / `Y` / `M` | copy the URL / snippet or code / Markdown link |
 | `e` | open the result in `$EDITOR` (page as Markdown, or the full code file at the matching line) |
@@ -154,16 +155,22 @@ Queries can also come from stdin: `echo "rust lifetimes" | search -m`.
 | `s` | fetch and summarise the result's page |
 | `S` | toggle the results summary |
 | `n`/`N`, `]`/`[` | next/previous results page |
-| `tab` / `shift+tab` | next/previous engine (re-runs the query) |
+| `tab` / `shift+tab` | engine picker dropdown (see below) |
 | `t` | cycle search type (web → code → repos → issues) |
 | `ctrl+e`, `c` | compose the query in `$EDITOR` |
 | `r` | re-run the search |
 | `?` | help (all bindings and bangs) |
 | `q`, `ctrl+c` | quit |
 
-In insert mode, `enter` searches, `esc` returns to normal mode, `tab`
-completes a `!bang` (or switches engine), `↑`/`↓` move through history and
-`ctrl+e` opens `$EDITOR`.
+In insert mode, `enter` searches, `esc` returns to the results, `tab`
+completes a `!bang` (or opens the engine picker), `↑`/`↓` move through
+history and `ctrl+e` opens `$EDITOR`.
+
+**Engine picker:** `tab` opens a dropdown under the search bar listing every
+usable engine with its bang and search types. Move with `↑`/`↓`, `j`/`k`, or
+by pressing `tab` repeatedly (`shift+tab` moves up). A letter jumps to the
+next engine starting with it, the mouse wheel and clicks work, `enter`
+switches engine and re-runs the query, and `esc` closes it.
 
 Mouse: the wheel scrolls, a click selects a result, a second click opens its
 details, and clicking the query line edits it.
@@ -187,7 +194,7 @@ details = ["l", "right"]
 | bing | `!b` | web | none (HTML, best effort) |
 | kagi | `!k` | web | `api_key` (Search API) **or** `token` (Session Link token) |
 | brave | `!br` | web | `api_key` |
-| mojeek | `!m` | web | `api_key` recommended (scraping is captcha'd) |
+| mojeek | `!m` | web | `api_key` (scraping is captcha'd) |
 | searxng | `!sx` | web | `base_url`; optional `username`/`password` or `token` |
 | wikipedia | `!w` | web | none (`language = "de"` etc.) |
 | stackoverflow | `!so` | web | none (optional `api_key` for quota) |
@@ -196,6 +203,15 @@ details = ["l", "right"]
 | gitlab | `!gl` `!glc` `!gli` | repos, code, issues | code/issues need `token*` or `$GITLAB_TOKEN` |
 | sourcegraph | `!sg` `!sgc` | code, repos | none for sourcegraph.com; `token` for private instances |
 | codeberg | `!cb` | repos | optional `token`; any Gitea/Forgejo via `base_url` |
+
+Engines that need configuration (Google, Kagi, Brave, Mojeek, SearXNG and
+custom instances of them) stay hidden until it is set. They don't appear in
+the engine picker, in `--list-engines` (which shows what to set at the end),
+or as fallbacks. Their bangs still work: `!g` opens Google in your browser
+until you add an `api_key` and `cx`. If `default_engine` names an unconfigured
+engine, DuckDuckGo is used and a warning is shown. A credential only counts as
+configured when its source is set; the `*_command` itself isn't run until you
+search.
 
 Each credential (`api_key`, `token`, `password`, `cx`) can be set as:
 

@@ -232,6 +232,9 @@ func newCustom(c *Client, name string, ec *config.Engine) (Engine, Info, error) 
 	// Built-in implementations can be reused for other instances.
 	for _, bi := range builtins {
 		if bi.info.Name == typ || (bi.typ != "" && bi.typ == typ) {
+			if bi.ready != nil && !bi.ready(ec) {
+				return nil, info, &notReadyError{missing: bi.hint}
+			}
 			info.Kinds = bi.info.Kinds
 			info.Auth = bi.info.Auth
 			info.Description = bi.info.Description + " (" + name + ")"
