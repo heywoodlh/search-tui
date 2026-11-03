@@ -254,6 +254,13 @@ func (m *Model) rerun() tea.Cmd {
 }
 
 func (m *Model) openURL(u string) tea.Cmd {
+	if sys.UsesTerminalURL(m.app.Cfg.Browser) {
+		if err := sys.OpenURLInTerminal(u); err != nil {
+			m.err = err
+			return nil
+		}
+		return m.setFlash("asked the terminal to open " + truncate(u, 50))
+	}
 	args := sys.BrowserCommand(m.app.Cfg.Browser, u)
 	if sys.IsTerminalBrowser(args) {
 		c := exec.Command(args[0], args[1:]...)

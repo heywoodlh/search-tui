@@ -58,3 +58,39 @@ func TestBrowserPrecedence(t *testing.T) {
 		t.Errorf("system default: %q", got)
 	}
 }
+
+func TestTerminalURL(t *testing.T) {
+	seq := OpenURLSequence("https://example.com/a;b", false)
+	if seq != "\x1b]1337;OpenURL=:aHR0cHM6Ly9leGFtcGxlLmNvbS9hO2I=\a" {
+		t.Errorf("sequence = %q", seq)
+	}
+	if got := OpenURLSequence("https://x", true); !strings.HasPrefix(got, "\x1bPtmux;\x1b\x1b]1337") || !strings.HasSuffix(got, "\x1b\\") {
+		t.Errorf("tmux wrap = %q", got)
+	}
+	for _, env := range []string{"BROWSER", "LC_TERMINAL", "TERM_PROGRAM", "SSH_CONNECTION", "SSH_TTY", "DISPLAY", "WAYLAND_DISPLAY", "TERMUX_VERSION"} {
+		t.Setenv(env, "")
+	}
+	if !UsesTerminalURL("rootshell") || UsesTerminalURL("firefox") {
+		t.Error("explicit selection")
+	}
+	t.Setenv("LC_TERMINAL", "rootshell")
+	t.Setenv("SSH_CONNECTION", "1.2.3.4 5 6.7.8.9 22")
+	if !UsesTerminalURL("") {
+		t.Error("rootshell over SSH should use the terminal")
+	}
+	if UsesTerminalURL("default") {
+		t.Error("an explicit browser setting must win")
+	}
+	t.Setenv("BROWSER", "w3m")
+	if UsesTerminalURL("") {
+		t.Error("$BROWSER should win over auto-detection")
+	}
+	t.Setenv("BROWSER", "")
+	t.Setenv("LC_TERMINAL", "")
+	if UsesTerminalURL("") {
+		t.Error("unknown terminal should not use OSC 1337")
+	}
+	if err := OpenURLInTerminal("javascript:alert(1)"); err == nil {
+		t.Error("non-http URL accepted")
+	}
+}
