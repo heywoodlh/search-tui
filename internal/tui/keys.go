@@ -40,6 +40,14 @@ const (
 	ActRefresh        Action = "refresh"
 	ActHelp           Action = "help"
 	ActQuit           Action = "quit"
+
+	// Panes. ActWindow is a vim-style prefix (ctrl+w) followed by s, v, w,
+	// h/j/k/l, q, c or o. The direct actions have no default keys.
+	ActWindow     Action = "window"
+	ActSplitHoriz Action = "split_horizontal"
+	ActSplitVert  Action = "split_vertical"
+	ActFocusNext  Action = "focus_next_pane"
+	ActClosePane  Action = "close_pane"
 )
 
 type actionDef struct {
@@ -80,6 +88,11 @@ var actionDefs = []actionDef{
 	{ActPrevEngine, []string{"shift+tab"}, "engine picker (move up)", ""},
 	{ActCycleType, []string{"t"}, "cycle search type (web/code/repos/issues)", "type"},
 	{ActRefresh, []string{"r", "ctrl+r"}, "re-run search", ""},
+	{ActWindow, []string{"ctrl+w"}, "pane prefix: then s/v split, h/j/k/l/w focus, q/c close, o only", "panes"},
+	{ActSplitHoriz, nil, "split the pane horizontally (stacked)", ""},
+	{ActSplitVert, nil, "split the pane vertically (side by side)", ""},
+	{ActFocusNext, nil, "focus the next pane", ""},
+	{ActClosePane, nil, "close the pane", ""},
 }
 
 // keyMap holds resolved bindings.

@@ -47,7 +47,17 @@ Queries can be piped in: echo "zig allocators" | search -m
     tab shift+tab     engine picker (j k ↑ ↓ tab move, letters jump)
     t                 cycle type: web → code → repos → issues
     ctrl+e c          compose the query in $EDITOR
-    r                 re-run           ?  help           q  quit
+    r                 re-run           ?  help
+    q                 close the pane (quit if it is the last)
+
+Panes, as in vim (outside the search bar):
+
+    ctrl+w s          split: new pane below
+    ctrl+w v          vsplit: new pane to the right
+    ctrl+w h j k l    focus the pane in that direction
+    ctrl+w w / W      next / previous pane
+    ctrl+w q / c      close the pane
+    ctrl+w o          only this pane
 
 Mouse: wheel scrolls, click selects, click again for details. Rebind anything under [keys], e.g.  open = ["o", "enter"]
 

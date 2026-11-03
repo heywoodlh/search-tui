@@ -57,6 +57,21 @@ Sleep 2s
 Escape
 Sleep 700ms
 
+# 2b. Split like vim and run the same query on another engine alongside.
+Ctrl+W
+Type "v"
+Sleep 900ms
+Tab
+Sleep 700ms
+Type "h"
+Sleep 700ms
+Enter
+Wait+Screen /hackernews ›/
+Sleep 3.5s
+Ctrl+W
+Type "o"
+Sleep 800ms
+
 # 3. Pick an engine from the tab dropdown.
 Escape
 Wait+Screen /type a query/

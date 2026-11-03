@@ -28,8 +28,20 @@ const (
 	modeHelp
 )
 
-// Model is the Bubble Tea model.
+// Model is one search pane: an independent search session with its own
+// query, engine, results and view. The root model (panes.go) arranges any
+// number of them in vim-style splits.
 type Model struct {
+	pid     int  // pane id, used to route async messages
+	focused bool // whether this pane has keyboard focus
+	// quitRequested is set when the user asks to quit (q); the root decides
+	// whether that closes this pane or the whole program.
+	quitRequested bool
+	// windowPending shows pane-command hints after the ctrl+w prefix.
+	windowPending bool
+	// multi is true when more than one pane is open (adds pane hints).
+	multi bool
+
 	app  *app.App
 	keys keyMap
 	st   styles
@@ -75,7 +87,7 @@ type Model struct {
 
 // Run starts the TUI.
 func Run(a *app.App, query string, opts app.PlanOptions) error {
-	m := New(a, query, opts)
+	m := NewRoot(a, query, opts)
 	popts := []tea.ProgramOption{tea.WithAltScreen()}
 	if *a.Cfg.UI.Mouse {
 		popts = append(popts, tea.WithMouseCellMotion())
@@ -111,6 +123,7 @@ func New(a *app.App, query string, opts app.PlanOptions) *Model {
 		pageErrs:    map[string]error{},
 		width:       80,
 		height:      24,
+		focused:     true,
 	}
 	m.detail = viewport.New(0, 0)
 	m.help = viewport.New(0, 0)
@@ -124,7 +137,11 @@ func New(a *app.App, query string, opts app.PlanOptions) *Model {
 
 // ---------------------------------------------------------------- messages
 
+// Every pane-originated message carries the pane id (pid) so the root model
+// can route it back to the pane that started the work.
+
 type resultsMsg struct {
+	pid     int
 	id      int
 	plan    app.Plan
 	results []engine.Result
@@ -132,12 +149,14 @@ type resultsMsg struct {
 }
 
 type extSummaryMsg struct {
+	pid  int
 	id   int
 	text string
 	err  error
 }
 
 type pageMsg struct {
+	pid  int
 	url  string
 	page app.Page
 	err  error
@@ -146,21 +165,37 @@ type pageMsg struct {
 }
 
 type codeMsg struct {
+	pid    int
 	result engine.Result
 	code   app.Code
 	err    error
 }
 
-type flashMsg struct{ id int }
+type flashMsg struct{ pid, id int }
 
 type editorDoneMsg struct {
+	pid     int
 	purpose string // "compose" | "view"
 	path    string
 	cleanup func()
 	err     error
 }
 
-type browserDoneMsg struct{ err error }
+type browserDoneMsg struct {
+	pid int
+	err error
+}
+
+// paneID routes messages to panes.
+func (m resultsMsg) paneID() int     { return m.pid }
+func (m extSummaryMsg) paneID() int  { return m.pid }
+func (m pageMsg) paneID() int        { return m.pid }
+func (m codeMsg) paneID() int        { return m.pid }
+func (m flashMsg) paneID() int       { return m.pid }
+func (m editorDoneMsg) paneID() int  { return m.pid }
+func (m browserDoneMsg) paneID() int { return m.pid }
+
+type paneTargeted interface{ paneID() int }
 
 // ---------------------------------------------------------------- init
 
@@ -185,7 +220,7 @@ func (m *Model) setFlash(s string) tea.Cmd {
 func (m *Model) flashLater() tea.Cmd {
 	m.flashID++
 	id := m.flashID
-	return tea.Tick(4*time.Second, func(time.Time) tea.Msg { return flashMsg{id} })
+	return tea.Tick(4*time.Second, func(time.Time) tea.Msg { return flashMsg{pid: m.pid, id: id} })
 }
 
 func (m *Model) current() (engine.Result, bool) {
@@ -238,7 +273,7 @@ func (m *Model) search(text string) tea.Cmd {
 	return tea.Batch(m.spinner.Tick, func() tea.Msg {
 		defer cancel()
 		rs, err := a.Search(ctx, &plan)
-		return resultsMsg{id: id, plan: plan, results: rs, err: err}
+		return resultsMsg{pid: m.pid, id: id, plan: plan, results: rs, err: err}
 	})
 }
 
@@ -257,7 +292,7 @@ func (m *Model) openURL(u string) tea.Cmd {
 	args := sys.BrowserCommand(m.app.Cfg.Browser, u)
 	if sys.IsTerminalBrowser(args) {
 		c := exec.Command(args[0], args[1:]...)
-		return tea.ExecProcess(c, func(err error) tea.Msg { return browserDoneMsg{err} })
+		return tea.ExecProcess(c, func(err error) tea.Msg { return browserDoneMsg{pid: m.pid, err: err} })
 	}
 	if err := sys.OpenURL(m.app.Cfg.Browser, u); err != nil {
 		m.err = err
@@ -280,7 +315,7 @@ func (m *Model) copy(text, what string) tea.Cmd {
 
 func (m *Model) fetchPage(u, then string) tea.Cmd {
 	if p, ok := m.pages[u]; ok {
-		return func() tea.Msg { return pageMsg{url: u, page: p, then: then} }
+		return func() tea.Msg { return pageMsg{pid: m.pid, url: u, page: p, then: then} }
 	}
 	m.busy = "fetching page…"
 	a, q, d := m.app, m.plan.Query.Text, m.timeout()
@@ -288,7 +323,7 @@ func (m *Model) fetchPage(u, then string) tea.Cmd {
 		ctx, cancel := context.WithTimeout(context.Background(), d)
 		defer cancel()
 		p, err := a.FetchPage(ctx, u, q)
-		return pageMsg{url: u, page: p, err: err, then: then}
+		return pageMsg{pid: m.pid, url: u, page: p, err: err, then: then}
 	})
 }
 
@@ -300,7 +335,7 @@ func (m *Model) editContent(name, content string, line int) tea.Cmd {
 	}
 	c := sys.EditorCmd(m.app.Cfg.Editor, p, line)
 	return tea.ExecProcess(c, func(err error) tea.Msg {
-		return editorDoneMsg{purpose: "view", path: p, cleanup: cleanup, err: err}
+		return editorDoneMsg{pid: m.pid, purpose: "view", path: p, cleanup: cleanup, err: err}
 	})
 }
 
@@ -312,7 +347,7 @@ func (m *Model) compose() tea.Cmd {
 	}
 	c := sys.EditorCmd(m.app.Cfg.Editor, p, 1)
 	return tea.ExecProcess(c, func(err error) tea.Msg {
-		return editorDoneMsg{purpose: "compose", path: p, cleanup: cleanup, err: err}
+		return editorDoneMsg{pid: m.pid, purpose: "compose", path: p, cleanup: cleanup, err: err}
 	})
 }
 
@@ -328,7 +363,7 @@ func (m *Model) editCurrent() tea.Cmd {
 			ctx, cancel := context.WithTimeout(context.Background(), d)
 			defer cancel()
 			c, err := a.FetchCode(ctx, r)
-			return codeMsg{result: r, code: c, err: err}
+			return codeMsg{pid: m.pid, result: r, code: c, err: err}
 		})
 	}
 	if r.Code != nil {
@@ -436,7 +471,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			a, q, rs, id := m.app, msg.plan.Query.Text, msg.results, msg.id
 			cmds = append(cmds, func() tea.Msg {
 				t, err := a.SummarizeExternal(context.Background(), q, rs)
-				return extSummaryMsg{id: id, text: t, err: err}
+				return extSummaryMsg{pid: m.pid, id: id, text: t, err: err}
 			})
 		}
 		return m, tea.Batch(cmds...)
@@ -602,6 +637,7 @@ func (m *Model) handleKey(msg tea.KeyMsg) tea.Cmd {
 			m.mode = modeNormal
 			return nil
 		}
+		m.quitRequested = true
 		return tea.Quit
 	case k.is(msg, ActHelp):
 		m.prev = m.mode

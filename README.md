@@ -173,7 +173,8 @@ Queries can also come from stdin: `echo "rust lifetimes" | search -m`.
 | `ctrl+e`, `c` | compose the query in `$EDITOR` |
 | `r` | re-run the search |
 | `?` | help (all bindings and bangs) |
-| `q`, `ctrl+c` | quit |
+| `ctrl+w` … | pane commands (see below) |
+| `q` / `ctrl+c` | close the pane (quit when it is the last one) / quit |
 
 In insert mode, `enter` searches, `esc` returns to the results, `tab`
 completes a `!bang` (or opens the engine picker), `↑`/`↓` move through
@@ -184,6 +185,27 @@ usable engine with its bang and search types. Move with `↑`/`↓`, `j`/`k`, or
 by pressing `tab` repeatedly (`shift+tab` moves up). A letter jumps to the
 next engine starting with it, the mouse wheel and clicks work, `enter`
 switches engine and re-runs the query, and `esc` closes it.
+
+**Panes:** split the screen like vim to run several searches side by side,
+for example the same query on two engines. Each pane is independent, with
+its own query, engine, results, details and status line. The focused pane's
+status line is highlighted.
+
+| Keys | Action |
+| --- | --- |
+| `ctrl+w s` | split: new pane below (stacked) |
+| `ctrl+w v` | vsplit: new pane to the right (side by side) |
+| `ctrl+w h`/`j`/`k`/`l` (or arrows) | focus the pane in that direction |
+| `ctrl+w w` / `ctrl+w W` | focus the next / previous pane |
+| `ctrl+w q`, `ctrl+w c` | close the pane (`q` quits on the last pane) |
+| `ctrl+w o` | keep only the focused pane |
+
+- **New panes** start as a copy of the current search.
+- **Splits** in the same direction share the space equally.
+- **Too small:** a split is refused if a pane would get narrower than 24 columns or shorter than 6 rows.
+- **Search bar:** pane commands work outside it; inside, `ctrl+w` deletes a word as in vim's insert mode.
+- **Mouse:** clicking a pane focuses it.
+- **Keys:** the `ctrl+w` prefix is the `window` action in `[keys]`. You can also bind `split_horizontal`, `split_vertical`, `focus_next_pane` and `close_pane` directly.
 
 Mouse: the wheel scrolls, a click selects a result, a second click opens its
 details, and clicking the query line edits it.

@@ -433,6 +433,11 @@ func (m *Model) refreshHelp() {
 		"↑/↓, j/k or tab/shift+tab move · enter select · letter jumps · esc close",
 		"Engines that need credentials appear once configured (search --list-engines)",
 		"",
+		m.st.accent.Render("Panes"),
+		"ctrl+w s split (stacked) · ctrl+w v vsplit (side by side): the new pane copies this search",
+		"ctrl+w h/j/k/l or arrows focus a neighbour · ctrl+w w / W next / previous",
+		"ctrl+w q or c close · ctrl+w o only this pane · q closes the pane when several are open",
+		"",
 		m.st.accent.Render("Mouse"),
 		"wheel scrolls · click selects · click again for details · click query to edit",
 		"",
@@ -537,6 +542,9 @@ func (m *Model) render() string {
 }
 
 func (m *Model) viewStatus() string {
+	if !m.focused {
+		return m.viewInactiveStatus()
+	}
 	var modeBadge string
 	switch m.mode {
 	case modeInsert:
@@ -575,6 +583,9 @@ func (m *Model) viewStatus() string {
 }
 
 func (m *Model) statusHints() [][2]string {
+	if m.windowPending {
+		return [][2]string{{"s", "split"}, {"v", "vsplit"}, {"hjkl", "focus"}, {"w", "next"}, {"q", "close"}, {"o", "only"}, {"esc", "cancel"}}
+	}
 	if m.picker.open {
 		return [][2]string{{"↑↓/jk/tab", "move"}, {"enter", "select"}, {"esc", "close"}, {"letter", "jump"}}
 	}
@@ -600,7 +611,15 @@ func (m *Model) statusHints() [][2]string {
 	case modeHelp:
 		return [][2]string{{m.keys.first(ActBack), "close"}, {"j/k", "scroll"}}
 	}
-	return m.keys.hints(ActSearch, ActDetails, ActOpen, ActYankURL, ActYankSnippet, ActEdit, ActSummarizePage, ActNextPage, ActNextEngine, ActCycleType, ActHelp, ActQuit)
+	hs := m.keys.hints(ActSearch, ActDetails, ActOpen, ActYankURL, ActYankSnippet, ActEdit, ActSummarizePage)
+	if k := m.keys.first(ActWindow); k != "" {
+		label := "split"
+		if m.multi {
+			label = "panes"
+		}
+		hs = append(hs, [2]string{k, label})
+	}
+	return append(hs, m.keys.hints(ActNextPage, ActNextEngine, ActCycleType, ActHelp, ActQuit)...)
 }
 
 func (m *Model) renderHints(hs [][2]string, avail int) string {
@@ -642,7 +661,7 @@ func displayURL(u string) string {
 func (m *Model) inputView(width int) string {
 	width = max(width, 1)
 	val := []rune(m.input.Value())
-	focused := m.input.Focused()
+	focused := m.input.Focused() && m.focused
 	cursor := m.st.accent.Underline(true)
 	if len(val) == 0 {
 		ph := []rune(m.input.Placeholder)
@@ -671,4 +690,22 @@ func (m *Model) inputView(width int) string {
 		after = string(val[pos+1 : end])
 	}
 	return text.Render(before) + cursor.Render(at) + text.Render(after)
+}
+
+// viewInactiveStatus is the status line of a pane without focus: muted, like
+// an inactive window in vim, naming the engine, query and position.
+func (m *Model) viewInactiveStatus() string {
+	parts := []string{" " + m.app.Reg.Display(m.currentEngine())}
+	if q := strings.TrimSpace(m.plan.Query.Text); q != "" {
+		parts = append(parts, q)
+	}
+	if len(m.results) > 0 {
+		parts = append(parts, fmt.Sprintf("%d/%d", m.sel+1, len(m.results)))
+	}
+	if m.loading {
+		parts = append(parts, "searching")
+	}
+	line := strings.Join(parts, " · ")
+	line = ansi.Truncate(line, max(m.width-1, 1), "…")
+	return m.st.muted.Render(line + strings.Repeat(" ", max(m.width-lipgloss.Width(line), 0)))
 }

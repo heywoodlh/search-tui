@@ -51,6 +51,10 @@ ascii = false                     # avoid non-ASCII glyphs in the UI
 # yank_url = ["y"]
 # edit = ["e"]
 # quit = ["q", "ctrl+c"]
+# window = ["ctrl+w"]             # pane prefix: then s, v, h/j/k/l, w, q, c, o
+# split_vertical = ["|"]          # optional direct bindings (unbound by default):
+# split_horizontal = ["-"]        #   split_horizontal, split_vertical,
+# focus_next_pane = ["ctrl+n"]    #   focus_next_pane, close_pane
 
 # Extra bangs: value is an engine name, "engine:type", ":type", or a URL template.
 [bangs]
