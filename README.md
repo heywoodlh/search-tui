@@ -381,9 +381,11 @@ Links open in, from highest priority:
 1. `--browser CMD`, then `browser = "..."` in the config. This is a command
    line, with an optional `%s` or `{url}` placeholder (otherwise the URL is
    appended), e.g. `"firefox --new-tab"` or `"chromium --incognito %s"`. On
-   macOS and Windows a bare application name also works:
-   `browser = "Google Chrome"` runs `open -a "Google Chrome"` or `start`.
+   macOS a bare application name also works: `browser = "Google Chrome"` runs
+   `open -a "Google Chrome"`. On Windows, give the browser's path, e.g.
+   `'C:\Program Files\Mozilla Firefox\firefox.exe'`.
    `browser = "default"` forces the system default.
+   Only `http` and `https` links are ever opened.
 2. `$BROWSER`, which may be a colon-separated list; the first one found is used.
 3. The system default: `xdg-open` on Linux and BSD, `open` on macOS, the
    default browser on Windows, `termux-open-url` on Android/Termux and
@@ -419,6 +421,7 @@ nix develop          # go, gopls, gotools
 go test ./...
 go run ./cmd/search
 nix flake check      # builds the package (runs tests) and checks the home-manager module
+nix develop .#ci -c scripts/check.sh   # every lint/security gate CI enforces
 ```
 
 Layout: `cmd/search` (entry point), `internal/cli` (flags, inline output),
@@ -443,8 +446,18 @@ The `Pages` workflow does both on every push to `main` and deploys to the
 `gh-pages` branch. For every pull request it deploys a preview to
 `pr-preview/pr-N/` and comments the URL on the PR.
 
+Pull requests must pass the `posture` check, which aggregates tests, Nix,
+golangci-lint (with gosec), govulncheck, actionlint and zizmor, shellcheck,
+gitleaks and nixfmt (see [SECURITY.md](SECURITY.md)).
+
 When you update Go dependencies, refresh `vendorHash` in `nix/package.nix`
 (build once and copy the `got:` hash).
+
+## Security
+
+[SECURITY.md](SECURITY.md) explains how to report a vulnerability, the threat
+model (terminal-escape sanitising, link and redirect safety, editor
+hardening) and the CI posture every pull request must pass.
 
 ## License
 

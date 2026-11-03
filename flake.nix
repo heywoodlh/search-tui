@@ -44,6 +44,19 @@
             gotools
           ];
         };
+        # Lint and security tooling used by CI (versions pinned by flake.lock).
+        ci = pkgs.mkShell {
+          packages = with pkgs; [
+            go
+            golangci-lint
+            govulncheck
+            actionlint
+            zizmor
+            shellcheck
+            gitleaks
+            nixfmt
+          ];
+        };
       });
 
       checks = forAllSystems (

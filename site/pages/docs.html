@@ -137,7 +137,7 @@ default, ansi (uses your terminal's palette), mono, catppuccin-mocha, -macchiato
 
 <h2>7. Browser and $EDITOR</h2>
 
-Links open with --browser, then browser = "...", then $BROWSER, then the system default (xdg-open, open, Windows, termux-open-url). Values are a command with optional %s, or an app name on macOS/Windows ("Firefox"). Terminal browsers such as w3m run inside the TUI.
+Links open with --browser, then browser = "...", then $BROWSER, then the system default (xdg-open, open, Windows, termux-open-url). Values are a command with optional %s, or an app name on macOS ("Firefox"); on Windows use the browser's path. Only http(s) links are opened. Terminal browsers such as w3m run inside the TUI.
 
 $EDITOR (or editor = "...") is used for composing queries in a temporary Markdown file, reading results and pages as Markdown, and opening the full source of code results at the matching line.
 

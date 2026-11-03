@@ -5,6 +5,11 @@ name: Pages
 # PR closed -> remove that preview
 #
 # GitHub Pages must be set to "Deploy from a branch: gh-pages / (root)".
+#
+# Security: `build` runs code from the commit (it builds search and records
+# the demo) with a read-only token. The jobs that can write (deploy,
+# preview) only run pinned third-party actions on the built artifact.
+# Fork PRs get no preview: they cannot be given a write token.
 
 on:
   push:
@@ -13,30 +18,36 @@ on:
     types: [opened, reopened, synchronize, closed]
   workflow_dispatch:
 
-permissions:
-  contents: write
-  pull-requests: write
+permissions: {}
 
 concurrency:
   group: pages-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
 
 jobs:
-  site:
+  build:
     if: github.event.action != 'closed'
     runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
 
-      - uses: cachix/install-nix-action@v31
+      - uses: cachix/install-nix-action@75c75c31ebece974e48ebc36b4ad125bd97bd97b # v31.11.3
 
       - name: Site URL
         id: url
+        env:
+          EVENT: ${{ github.event_name }}
+          PR: ${{ github.event.pull_request.number }}
         run: |
           owner="${GITHUB_REPOSITORY%%/*}"
           base="https://${owner}.github.io/${GITHUB_REPOSITORY#*/}/"
-          if [ "${{ github.event_name }}" = pull_request ]; then
-            base="${base}pr-preview/pr-${{ github.event.pull_request.number }}/"
+          if [ "$EVENT" = pull_request ]; then
+            base="${base}pr-preview/pr-${PR}/"
           fi
           echo "base=$base" >> "$GITHUB_OUTPUT"
 
@@ -44,11 +55,10 @@ jobs:
       # failed recording (e.g. a search engine rate-limiting the runner) must
       # not block the site.
       - name: Record demo
-        id: demo
         continue-on-error: true
         timeout-minutes: 15
         env:
-          GH_TOKEN: ${{ github.token }}
+          GH_TOKEN: ${{ github.token }} # read-only; raises GitHub API rate limits
           VHS_NO_SANDBOX: "true"
         run: |
           DEMO_FONT_DIR="$(nix build --inputs-from . --no-link --print-out-paths nixpkgs#jetbrains-mono)/share/fonts"
@@ -57,8 +67,10 @@ jobs:
             -c demo/record.sh "$RUNNER_TEMP/demo"
 
       - name: Build site
+        env:
+          BASE: ${{ steps.url.outputs.base }}
         run: |
-          args=(_site "${{ steps.url.outputs.base }}")
+          args=(_site "$BASE")
           if [ -s "$RUNNER_TEMP/demo/demo.mp4" ]; then
             args+=("$RUNNER_TEMP/demo")
           else
@@ -66,18 +78,52 @@ jobs:
           fi
           site/build.sh "${args[@]}"
 
-      - name: Deploy
-        if: github.event_name != 'pull_request'
-        uses: JamesIves/github-pages-deploy-action@v4
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: site
+          path: _site
+          include-hidden-files: true # .nojekyll
+          retention-days: 3
+
+  deploy:
+    if: github.event_name != 'pull_request'
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write # push to gh-pages
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: site
+          path: _site
+      - uses: JamesIves/github-pages-deploy-action@fa24774553152dd7873cd16ebd8d959b010c5445 # v4.9.0
         with:
           folder: _site
           branch: gh-pages
           clean-exclude: pr-preview/
           force: false
 
-      - name: Deploy preview and comment
-        if: github.event_name == 'pull_request'
-        uses: rossjrw/pr-preview-action@v1
+  preview:
+    if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write # push to gh-pages
+      pull-requests: write # preview URL comment
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: site
+          path: _site
+      - uses: rossjrw/pr-preview-action@873417d2df72380da1f3978378fb58560bcde976 # v1.8.2
         with:
           source-dir: _site
           preview-branch: gh-pages
@@ -85,11 +131,17 @@ jobs:
           action: deploy
 
   remove-preview:
-    if: github.event_name == 'pull_request' && github.event.action == 'closed'
+    if: github.event_name == 'pull_request' && github.event.action == 'closed' && github.event.pull_request.head.repo.full_name == github.repository
     runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+      pull-requests: write
     steps:
-      - uses: actions/checkout@v4
-      - uses: rossjrw/pr-preview-action@v1
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: rossjrw/pr-preview-action@873417d2df72380da1f3978378fb58560bcde976 # v1.8.2
         with:
           preview-branch: gh-pages
           umbrella-dir: pr-preview
