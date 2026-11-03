@@ -33,7 +33,9 @@ if [[ -n "${DEMO_FONT_DIR:-}" ]]; then
 XML
   export FONTCONFIG_FILE="$work/fonts.conf"
 fi
-unset DISPLAY WAYLAND_DISPLAY BROWSER
+# termenv (lipgloss) disables colour whenever $CI is set, as it is on CI
+# runners; the recorded terminal is a real, colour-capable TTY.
+unset DISPLAY WAYLAND_DISPLAY BROWSER CI
 
 (cd "$work" && vhs demo.tape)
 
