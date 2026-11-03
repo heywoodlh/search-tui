@@ -58,7 +58,7 @@ func (m *Model) layout() layoutInfo {
 		l.listW = max(m.width*45/100, 40)
 		l.previewW = m.width - l.listW
 	}
-	l.showDetailFull = m.mode == modeDetail && l.kind == layoutStacked
+	l.showDetailFull = (m.mode == modeDetail || m.mode == modeVisual) && l.kind == layoutStacked
 	if m.showSummary && !m.summaryEmpty() && !l.showDetailFull && m.height >= 16 && m.mode != modeHelp {
 		l.sumH = len(m.summaryLines(m.width))
 	}
@@ -232,6 +232,16 @@ func (m *Model) viewList(l layoutInfo) string {
 				}
 			} else if j == 0 {
 				line = m.st.title.Render(line)
+			}
+			if j == 0 && m.hint.active {
+				if label, ok := m.hint.byIdx[i]; ok {
+					// Typed characters are dimmed; the rest is what to type.
+					typed := ""
+					if strings.HasPrefix(label, m.hint.typed) {
+						typed, label = m.hint.typed, label[len(m.hint.typed):]
+					}
+					line = m.st.muted.Render(typed) + m.st.key.Underline(true).Render(label) + " " + line
+				}
 			}
 			all = append(all, prefix+line)
 		}
@@ -411,6 +421,9 @@ func (m *Model) detailContent(r engine.Result, w int) string {
 
 func (m *Model) viewDetail(l layoutInfo, w int) string {
 	content := m.detail.View()
+	if m.mode == modeVisual {
+		content = m.visualView(w, l.listH)
+	}
 	return lipgloss.NewStyle().Width(w).MaxWidth(w).Height(l.listH).MaxHeight(l.listH).Render(content)
 }
 
@@ -419,31 +432,60 @@ func (m *Model) viewDetail(l layoutInfo, w int) string {
 func (m *Model) refreshHelp() {
 	w := max(m.width-4, 10)
 	var b []string
-	b = append(b, m.st.accent.Render("Keybindings")+m.st.muted.Render(" (configure in [keys])"), "")
+	m.helpSections = map[string]int{}
+	section := func(topic, title string, lines ...string) {
+		if len(b) > 0 {
+			b = append(b, "")
+		}
+		m.helpSections[topic] = len(b)
+		b = append(b, m.st.accent.Render(title))
+		b = append(b, lines...)
+	}
+	section("keys", "Keybindings"+m.st.muted.Render(" (configure in [keys]; counts like 5j and 3G work)"))
+	b = append(b, "")
 	for _, kv := range m.keys.helpLines() {
 		k := m.st.key.Render(kv[0])
 		pad := strings.Repeat(" ", max(24-lipgloss.Width(k), 1))
 		b = append(b, ansi.Truncate(k+pad+kv[1], w, "…"))
 	}
-	b = append(b, "",
-		m.st.accent.Render("Insert mode"),
-		"enter search · esc back to results / normal mode · ↑/↓ history",
-		"tab complete !bang, otherwise open the engine picker · ctrl+e compose in $EDITOR",
-		"",
-		m.st.accent.Render("Engine picker"),
+	section("insert", "Insert mode (search bar)",
+		"enter search · esc normal mode · ↑/↓ history · ctrl+w delete word",
+		"tab complete !bang, otherwise open the engine picker · ctrl+e compose in $EDITOR")
+	section("search", "Engine picker",
 		"↑/↓, j/k or tab/shift+tab move · enter select · letter jumps · esc close",
-		"Engines that need credentials appear once configured (search --list-engines)",
-		"",
-		m.st.accent.Render("Panes"),
-		"ctrl+w s split (stacked) · ctrl+w v vsplit (side by side): the new pane copies this search",
-		"ctrl+w h/j/k/l or arrows focus a neighbour · ctrl+w w / W next / previous",
-		"ctrl+w q or c close · ctrl+w o only this pane · q closes the pane when several are open",
-		"",
-		m.st.accent.Render("Mouse"),
-		"wheel scrolls · click selects · click again for details · click query to edit",
-		"",
-		m.st.accent.Render("Bangs"),
-	)
+		"Engines that need credentials appear once configured (:engines lists them)")
+	section("hints", "Hints (f / F)",
+		"f labels every visible result; type a label to jump to it and show its details",
+		"F does the same but opens the result in the browser · esc cancels")
+	section("visual", "Visual mode (v / V)",
+		"Select text in the selected result's details, then y to copy it (Y copies whole lines)",
+		"h j k l · w b e · 0 ^ $ · gg G · ctrl+d ctrl+u · f F t T {char}, ; and , repeat",
+		"counts (3w) · o swaps ends · v/V switch character/line selection · esc cancels")
+	section("panes", "Panes (ctrl+w …)",
+		"s split · v vsplit · n new empty pane · h/j/k/l or arrows focus · w/W next/previous",
+		"q or c close · o only · T move to a new tab · + - resize height · < > width",
+		"_ | maximise · = equal sizes · q closes the pane when several are open")
+	section("tabs", "Tabs",
+		"gt / gT next / previous tab · Ngt tab N · :tabnew · :tabclose · click a tab to switch")
+	section("commands", "Commands (:)",
+		m.st.muted.Render("tab completes · ↑/↓ history · abbreviations like :sp :vs :tabn work · :N jumps to result N"),
+		m.st.muted.Render("modifiers: :vertical / :aboveleft / :belowright / :tab {cmd}, e.g. :vert new rust"))
+	for _, c := range commands {
+		name := ":" + c.name
+		if c.usage != "" {
+			name += " " + c.usage
+		}
+		k := m.st.key.Render(name)
+		pad := strings.Repeat(" ", max(28-lipgloss.Width(k), 1))
+		desc := c.desc
+		if len(c.aliases) > 0 {
+			desc += m.st.muted.Render(" (" + strings.Join(c.aliases, ", ") + ")")
+		}
+		b = append(b, ansi.Truncate(k+pad+desc, w, "…"))
+	}
+	section("mouse", "Mouse",
+		"wheel scrolls · click selects · click again for details · click a pane to focus it · click the query to edit")
+	section("bangs", "Bangs")
 	var bangs []string
 	for _, e := range m.app.Bangs.List() {
 		bangs = append(bangs, e.Bang)
@@ -523,7 +565,7 @@ func (m *Model) render() string {
 		case l.kind == layoutSplit:
 			left := m.viewList(l)
 			sepStyle := m.st.border
-			if m.mode == modeDetail {
+			if m.mode == modeDetail || m.mode == modeVisual {
 				sepStyle = m.st.bar
 			}
 			sep := sepStyle.Render(strings.TrimRight(strings.Repeat("│\n", l.listH), "\n"))
@@ -547,6 +589,16 @@ func (m *Model) viewStatus() string {
 		return m.viewInactiveStatus()
 	}
 	var modeBadge string
+	switch {
+	case m.mode == modeVisual:
+		return m.withHints(m.visualStatus())
+	case m.hint.active:
+		label := " HINT"
+		if m.hint.open {
+			label = " OPEN"
+		}
+		return m.withHints(m.st.modeDet.Render(label) + m.st.statusBar.Render(" "+m.hint.typed+" "))
+	}
 	switch m.mode {
 	case modeInsert:
 		modeBadge = m.st.modeIns.Render(" INS")
@@ -565,6 +617,13 @@ func (m *Model) viewStatus() string {
 		if m.plan.Query.Page > 1 {
 			info += fmt.Sprintf(" p%d", m.plan.Query.Page)
 		}
+	}
+	if m.count > 0 || len(m.pending) > 0 {
+		// Like vim's showcmd: the count and keys typed so far.
+		if m.count > 0 {
+			info += fmt.Sprintf(" %d", m.count)
+		}
+		info += " " + strings.Join(m.pending, "")
 	}
 	if m.loading {
 		info += " " + m.spinner.View() + " searching"
@@ -589,6 +648,12 @@ func (m *Model) statusHints() [][2]string {
 	}
 	if m.picker.open {
 		return [][2]string{{"↑↓/jk/tab", "move"}, {"enter", "select"}, {"esc", "close"}, {"letter", "jump"}}
+	}
+	if m.hint.active {
+		return [][2]string{{"label", "jump"}, {"backspace", "undo"}, {"esc", "cancel"}}
+	}
+	if m.mode == modeVisual {
+		return [][2]string{{"y", "copy"}, {"hjkl/w/b/e", "move"}, {"f/t", "find"}, {"o", "other end"}, {"v/V", "char/line"}, {"esc", "cancel"}}
 	}
 	switch m.mode {
 	case modeInsert:
@@ -709,4 +774,17 @@ func (m *Model) viewInactiveStatus() string {
 	line := strings.Join(parts, " · ")
 	line = ansi.Truncate(line, max(m.width-1, 1), "…")
 	return m.st.muted.Render(line + strings.Repeat(" ", max(m.width-lipgloss.Width(line), 0)))
+}
+
+// withHints completes a status line from its left part plus key hints.
+func (m *Model) withHints(left string) string {
+	avail := m.width - lipgloss.Width(left)
+	var right string
+	if m.flash != "" {
+		right = m.st.statusBar.Render(ansi.Truncate(" "+safe.Line(m.flash)+" ", max(avail, 0), "…"))
+	} else {
+		right = m.renderHints(m.statusHints(), avail)
+	}
+	fill := max(m.width-lipgloss.Width(left)-lipgloss.Width(right), 0)
+	return ansi.Truncate(left+strings.Repeat(" ", fill)+right, m.width, "")
 }

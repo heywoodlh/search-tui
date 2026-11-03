@@ -48,6 +48,15 @@ const (
 	ActSplitVert  Action = "split_vertical"
 	ActFocusNext  Action = "focus_next_pane"
 	ActClosePane  Action = "close_pane"
+
+	// Vim-style extras.
+	ActCommand    Action = "command"     // ":" command line
+	ActVisual     Action = "visual"      // characterwise visual mode on the details text
+	ActVisualLine Action = "visual_line" // linewise visual mode
+	ActHint       Action = "hint"        // label visible results; type a label to jump
+	ActHintOpen   Action = "hint_open"   // like hint, but open the result in the browser
+	ActNextTab    Action = "next_tab"
+	ActPrevTab    Action = "prev_tab"
 )
 
 type actionDef struct {
@@ -70,8 +79,8 @@ var actionDefs = []actionDef{
 	{ActQuit, []string{"q", "ctrl+c"}, "quit", "quit"},
 	{ActUp, []string{"k", "up"}, "previous result / scroll up", ""},
 	{ActDown, []string{"j", "down"}, "next result / scroll down", ""},
-	{ActTop, []string{"g", "home"}, "first result", ""},
-	{ActBottom, []string{"G", "end"}, "last result", ""},
+	{ActTop, []string{"gg", "home"}, "first result (with a count: result N)", ""},
+	{ActBottom, []string{"G", "end"}, "last result (with a count: result N)", ""},
 	{ActPageDown, []string{"ctrl+d", "pgdown", "ctrl+f"}, "page down", ""},
 	{ActPageUp, []string{"ctrl+u", "pgup", "ctrl+b"}, "page up", ""},
 	{ActBack, []string{"esc"}, "back: details → results → start page", "back"},
@@ -88,6 +97,13 @@ var actionDefs = []actionDef{
 	{ActPrevEngine, []string{"shift+tab"}, "engine picker (move up)", ""},
 	{ActCycleType, []string{"t"}, "cycle search type (web/code/repos/issues)", "type"},
 	{ActRefresh, []string{"r", "ctrl+r"}, "re-run search", ""},
+	{ActCommand, []string{":"}, "command line (:help commands)", ""},
+	{ActVisual, []string{"v"}, "visual mode: select text in the details (y copies)", ""},
+	{ActVisualLine, []string{"V"}, "linewise visual mode", ""},
+	{ActHint, []string{"f"}, "hints: label results, type a label to jump to it", ""},
+	{ActHintOpen, []string{"F"}, "hints: type a label to open that result in the browser", ""},
+	{ActNextTab, []string{"gt"}, "next tab", ""},
+	{ActPrevTab, []string{"gT"}, "previous tab", ""},
 	{ActWindow, []string{"ctrl+w"}, "pane prefix: then s/v split, h/j/k/l/w focus, q/c close, o only", "panes"},
 	{ActSplitHoriz, nil, "split the pane horizontally (stacked)", ""},
 	{ActSplitVert, nil, "split the pane vertically (side by side)", ""},
@@ -110,6 +126,7 @@ func newKeyMap(overrides map[string][]string) (keyMap, []string) {
 		if o, ok := overrides[string(d.act)]; ok {
 			keys = o
 		}
+		keys = canonicalKeys(keys)
 		km.b[d.act] = key.NewBinding(key.WithKeys(keys...), key.WithHelp(displayKeys(keys), d.desc))
 		if len(keys) == 0 {
 			km.b[d.act] = key.NewBinding(key.WithDisabled())
@@ -127,9 +144,80 @@ func newKeyMap(overrides map[string][]string) (keyMap, []string) {
 	return km, unknown
 }
 
+// namedKeys are multi-character key names that are a single key press.
+var namedKeys = map[string]bool{
+	"up": true, "down": true, "left": true, "right": true, "home": true, "end": true,
+	"pgup": true, "pgdown": true, "enter": true, "esc": true, "tab": true, "backspace": true,
+	"delete": true, "insert": true,
+}
+
+// canonicalKeys turns vim-style sequences ("gg", "gT") into space-separated
+// key tokens ("g g"). Named keys ("pgdown", "ctrl+w", "f5") stay single tokens.
+func canonicalKeys(keys []string) []string {
+	out := make([]string, 0, len(keys))
+	for _, k := range keys {
+		r := []rune(k)
+		switch {
+		case k == "space":
+			out = append(out, " ")
+		case len(r) <= 1, strings.Contains(k, "+"), strings.Contains(k, " "), namedKeys[k], isFunctionKey(k):
+			out = append(out, k)
+		default:
+			toks := make([]string, len(r))
+			for i, c := range r {
+				toks[i] = string(c)
+			}
+			out = append(out, strings.Join(toks, " "))
+		}
+	}
+	return out
+}
+
+func isFunctionKey(k string) bool {
+	return len(k) >= 2 && len(k) <= 3 && k[0] == 'f' && strings.Trim(k[1:], "0123456789") == ""
+}
+
+// isExact reports whether a key sequence ("g t") is bound to anything.
+func (km keyMap) isExact(seq string) bool {
+	for _, b := range km.b {
+		if !b.Enabled() {
+			continue
+		}
+		for _, k := range b.Keys() {
+			if k == seq {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+// isPrefix reports whether seq starts a longer bound sequence.
+func (km keyMap) isPrefix(seq string) bool {
+	for _, b := range km.b {
+		if !b.Enabled() {
+			continue
+		}
+		for _, k := range b.Keys() {
+			if strings.HasPrefix(k, seq+" ") {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+// seqKey is a resolved key sequence, matched like a key press.
+type seqKey string
+
+func (s seqKey) String() string { return string(s) }
+
 func displayKeys(keys []string) string {
 	out := make([]string, 0, len(keys))
 	for _, k := range keys {
+		if k != " " {
+			k = strings.ReplaceAll(k, " ", "")
+		}
 		switch k {
 		case " ":
 			k = "space"

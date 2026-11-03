@@ -95,8 +95,12 @@ func TestNavigation(t *testing.T) {
 		t.Error("list did not scroll")
 	}
 	send(m, kp("g"))
+	if m.sel == 0 {
+		t.Error("a single g should wait for the next key")
+	}
+	send(m, kp("g"))
 	if m.sel != 0 || m.offset != 0 {
-		t.Errorf("g: sel=%d offset=%d", m.sel, m.offset)
+		t.Errorf("gg: sel=%d offset=%d", m.sel, m.offset)
 	}
 	send(m, kp("enter"))
 	if m.mode != modeDetail {
@@ -162,16 +166,24 @@ func TestEscBackChain(t *testing.T) {
 		t.Fatal("esc from details should return to results")
 	}
 	send(m, kp("esc"))
-	if len(m.results) != 0 || m.plan.Engine != nil || m.input.Value() != "" || m.mode != modeInsert {
-		t.Fatalf("esc from results should reach the start page: mode=%d results=%d input=%q", m.mode, len(m.results), m.input.Value())
+	if len(m.results) != 0 || m.plan.Engine != nil || m.input.Value() != "" || m.mode != modeNormal {
+		t.Fatalf("esc from results should reach the start page in normal mode: mode=%d results=%d input=%q", m.mode, len(m.results), m.input.Value())
 	}
 	send(m, kp("esc"))
 	if m.mode != modeNormal {
-		t.Error("esc on start page should leave the search bar")
+		t.Error("esc on the start page must not enter insert mode")
+	}
+	// In insert mode esc only leaves insert mode; it never navigates back.
+	m.setResults([]engine.Result{{Title: "A", URL: "https://a"}})
+	plan, _ := m.app.Plan("x", app.PlanOptions{})
+	m.plan = plan
+	send(m, kp("/"))
+	if m.mode != modeInsert {
+		t.Fatal("/ should focus the search bar")
 	}
 	send(m, kp("esc"))
-	if m.mode != modeInsert {
-		t.Error("esc again should refocus the search bar")
+	if m.mode != modeNormal || len(m.results) != 1 {
+		t.Errorf("esc in insert mode should only switch to normal mode (mode=%d results=%d)", m.mode, len(m.results))
 	}
 }
 

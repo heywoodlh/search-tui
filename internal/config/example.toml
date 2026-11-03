@@ -33,6 +33,7 @@ mouse = true
 layout = "auto"                   # auto | split | stacked
 split_min_width = 110             # auto layout uses a preview pane from this width
 snippet_lines = 2
+# hint_chars = "asdfghjkl"        # labels for f/F result hints
 status_bar = true
 show_summary = true
 theme = "default"                 # see `search --list-themes`; "ansi" follows your terminal's palette

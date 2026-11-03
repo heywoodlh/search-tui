@@ -1,6 +1,7 @@
 package tui
 
 import (
+	"fmt"
 	"strings"
 
 	tea "github.com/charmbracelet/bubbletea"
@@ -25,6 +26,15 @@ type node struct {
 	dir      splitDir
 	children []*node
 	pane     *Model // leaf only
+	// size is a fixed size along the parent's split axis set by :resize or
+	// ctrl+w +/-/</>; 0 shares the space equally.
+	size int
+}
+
+// tab is one tab page: its own split tree and focused pane.
+type tab struct {
+	tree  *node
+	focus *Model
 }
 
 type rect struct{ x, y, w, h int }
@@ -47,12 +57,21 @@ type Root struct {
 	height   int
 	pending  bool // ctrl+w prefix pressed
 	initOpts app.PlanOptions
+
+	// tabs holds every tab page; tree/focus mirror tabs[cur].
+	tabs []*tab
+	cur  int
+	cmd  cmdline
+	// pendingCmd carries the tea.Cmd produced while executing a command.
+	pendingCmd tea.Cmd
 }
 
 // NewRoot creates the root with a single pane.
 func NewRoot(a *app.App, query string, opts app.PlanOptions) *Root {
 	p := New(a, query, opts)
 	r := &Root{app: a, tree: &node{pane: p}, focus: p, nextID: 1, rects: map[*Model]rect{}, width: 80, height: 24, initOpts: opts}
+	r.tabs = []*tab{{tree: r.tree, focus: r.focus}}
+	r.cmd = newCmdline()
 	r.layout()
 	return r
 }
@@ -74,8 +93,23 @@ func (r *Root) panes() []*Model {
 	return out
 }
 
+// allPanes lists the panes of every tab.
+func (r *Root) allPanes() []*Model {
+	r.save()
+	cur, tree := r.cur, r.tree
+	var out []*Model
+	for _, t := range r.tabs {
+		r.tree = t.tree
+		out = append(out, r.panes()...)
+	}
+	r.cur, r.tree = cur, tree
+	return out
+}
+
+func (r *Root) save() { r.tabs[r.cur].tree, r.tabs[r.cur].focus = r.tree, r.focus }
+
 func (r *Root) find(pid int) *Model {
-	for _, p := range r.panes() {
+	for _, p := range r.allPanes() {
 		if p.pid == pid {
 			return p
 		}
@@ -100,8 +134,13 @@ func (r *Root) leaf(p *Model) *node {
 
 // layout assigns a rectangle to every pane and resizes them.
 func (r *Root) layout() {
+	r.save()
 	r.rects = map[*Model]rect{}
-	r.place(r.tree, rect{0, 0, r.width, r.height})
+	top := 0
+	if len(r.tabs) > 1 {
+		top = 1 // tab bar
+	}
+	r.place(r.tree, rect{0, top, r.width, max(r.height-top, 1)})
 	multi := len(r.rects) > 1
 	for p, rc := range r.rects {
 		p.focused = p == r.focus
@@ -117,54 +156,129 @@ func (r *Root) place(n *node, rc rect) {
 		return
 	}
 	k := len(n.children)
-	if n.dir == splitSideBySide {
-		avail := rc.w - (k - 1) // one column separators
-		x := rc.x
-		for i, c := range n.children {
-			w := avail / k
-			if i < avail%k {
-				w++
-			}
-			r.place(c, rect{x, rc.y, w, rc.h})
-			x += w + 1
-		}
-		return
+	side := n.dir == splitSideBySide
+	avail, minSize := rc.h, minPaneHeight
+	if side {
+		avail, minSize = rc.w-(k-1), minPaneWidth // one-column separators
 	}
-	y := rc.y
+	sizes := shareSpace(n.children, avail, minSize)
+	x, y := rc.x, rc.y
 	for i, c := range n.children {
-		h := rc.h / k
-		if i < rc.h%k {
-			h++
+		if side {
+			r.place(c, rect{x, rc.y, sizes[i], rc.h})
+			x += sizes[i] + 1
+		} else {
+			r.place(c, rect{rc.x, y, rc.w, sizes[i]})
+			y += sizes[i]
 		}
-		r.place(c, rect{rc.x, y, rc.w, h})
-		y += h
 	}
 }
 
-// split opens a new pane next to the focused one. The new pane starts as a
-// copy of the focused pane's search so you can compare engines side by side.
-func (r *Root) split(dir splitDir) tea.Cmd {
+// shareSpace divides avail cells between children: fixed sizes (from
+// :resize) are honoured as far as the others' minimum allows, the rest is
+// shared equally.
+func shareSpace(children []*node, avail, minSize int) []int {
+	k := len(children)
+	sizes := make([]int, k)
+	flex := 0
+	fixedTotal := 0
+	for i, c := range children {
+		if c.size > 0 {
+			sizes[i] = c.size
+			fixedTotal += c.size
+		} else {
+			flex++
+		}
+	}
+	reserve := flex * minSize
+	if flex == 0 {
+		reserve = 0
+	}
+	// Shrink fixed sizes proportionally if they don't fit.
+	if limit := max(avail-reserve, 0); fixedTotal > limit && fixedTotal > 0 {
+		for i, c := range children {
+			if c.size > 0 {
+				sizes[i] = max(c.size*limit/fixedTotal, 1)
+			}
+		}
+	}
+	used := 0
+	for _, sz := range sizes {
+		used += sz
+	}
+	rest := max(avail-used, 0)
+	if flex == 0 {
+		sizes[k-1] += rest // the last pane absorbs any remainder
+		return sizes
+	}
+	j := 0
+	for i, c := range children {
+		if c.size == 0 {
+			sizes[i] = rest / flex
+			if j < rest%flex {
+				sizes[i]++
+			}
+			j++
+		}
+	}
+	return sizes
+}
+
+// split opens a new pane next to the focused one (below/right, or
+// above/left with before). The new pane copies the focused pane's search so
+// you can compare engines side by side; empty starts on the start page, and
+// query runs a search in the new pane.
+func (r *Root) split(dir splitDir) tea.Cmd { return r.splitWith(dir, false, false, "") }
+
+func (r *Root) splitWith(dir splitDir, before, empty bool, query string) tea.Cmd {
 	cur := r.rects[r.focus]
 	if dir == splitSideBySide && (cur.w-1)/2 < minPaneWidth || dir == splitStacked && cur.h/2 < minPaneHeight {
 		return r.focus.setFlash("not enough room to split here")
 	}
-	p := r.clone(r.focus)
+	p := r.newPane(r.focus, empty)
 	n := r.leaf(r.focus)
 	newLeaf := &node{pane: p}
 	if n.parent != nil && n.parent.dir == dir {
 		par := n.parent
 		idx := indexOf(par.children, n)
-		par.children = append(par.children[:idx+1], append([]*node{newLeaf}, par.children[idx+1:]...)...)
+		if !before {
+			idx++
+		}
+		par.children = append(par.children[:idx], append([]*node{newLeaf}, par.children[idx:]...)...)
 		newLeaf.parent = par
 	} else {
 		// Turn the leaf into a split holding the old pane and the new one.
 		old := &node{pane: n.pane, parent: n}
 		n.pane, n.dir = nil, dir
 		n.children = []*node{old, newLeaf}
+		if before {
+			n.children = []*node{newLeaf, old}
+		}
 		newLeaf.parent = n
 	}
 	r.focus = p
 	r.layout()
+	return r.startPane(p, query)
+}
+
+// newPane clones src, or makes an empty pane on the start page.
+func (r *Root) newPane(src *Model, empty bool) *Model {
+	if !empty {
+		return r.clone(src)
+	}
+	p := New(r.app, "", r.initOpts)
+	p.pid = r.nextID
+	r.nextID++
+	p.flash = ""
+	return p
+}
+
+// startPane runs query in a new pane, or initialises it.
+func (r *Root) startPane(p *Model, query string) tea.Cmd {
+	if strings.TrimSpace(query) != "" {
+		p.input.SetValue(query)
+		return p.submit()
+	}
 	if strings.TrimSpace(p.input.Value()) == "" {
 		return p.Init()
 	}
@@ -206,10 +320,14 @@ func (r *Root) clone(src *Model) *Model {
 	return p
 }
 
-// close removes a pane; closing the last one quits.
+// close removes a pane. Closing the last pane of a tab closes the tab;
+// closing the last pane of the last tab quits.
 func (r *Root) close(p *Model) tea.Cmd {
 	all := r.panes()
 	if len(all) == 1 {
+		if len(r.tabs) > 1 {
+			return r.closeTab(r.cur)
+		}
 		return tea.Quit
 	}
 	if p.cancel != nil {
@@ -247,6 +365,163 @@ func (r *Root) only() {
 		}
 	}
 	r.tree = &node{pane: r.focus}
+	r.layout()
+}
+
+// ---------------------------------------------------------------- tabs
+
+func (r *Root) switchTab(i int) {
+	if i < 0 || i >= len(r.tabs) {
+		return
+	}
+	r.save()
+	r.cur = i
+	r.tree, r.focus = r.tabs[i].tree, r.tabs[i].focus
+	r.layout()
+}
+
+// newTab opens a tab after the current one with pane p.
+func (r *Root) newTab(p *Model, query string) tea.Cmd {
+	r.save()
+	t := &tab{tree: &node{pane: p}, focus: p}
+	r.tabs = append(r.tabs[:r.cur+1], append([]*tab{t}, r.tabs[r.cur+1:]...)...)
+	r.cur++
+	r.tree, r.focus = t.tree, t.focus
+	r.layout()
+	return r.startPane(p, query)
+}
+
+func (r *Root) closeTab(i int) tea.Cmd {
+	if len(r.tabs) == 1 {
+		return tea.Quit
+	}
+	r.save()
+	cur := r.tree
+	r.tree = r.tabs[i].tree
+	for _, p := range r.panes() {
+		if p.cancel != nil {
+			p.cancel()
+		}
+	}
+	r.tree = cur
+	r.tabs = append(r.tabs[:i], r.tabs[i+1:]...)
+	r.cur = min(r.cur, len(r.tabs)-1)
+	if i < r.cur || i == r.cur {
+		r.cur = max(min(i, len(r.tabs)-1), 0)
+	}
+	r.tree, r.focus = r.tabs[r.cur].tree, r.tabs[r.cur].focus
+	r.layout()
+	return nil
+}
+
+func (r *Root) tabOnly() {
+	r.save()
+	keep := r.tabs[r.cur]
+	for i := range r.tabs {
+		if r.tabs[i] != keep {
+			r.tree = r.tabs[i].tree
+			for _, p := range r.panes() {
+				if p.cancel != nil {
+					p.cancel()
+				}
+			}
+		}
+	}
+	r.tabs, r.cur = []*tab{keep}, 0
+	r.tree, r.focus = keep.tree, keep.focus
+	r.layout()
+}
+
+// moveTab moves the current tab to index i (clamped).
+func (r *Root) moveTab(i int) {
+	r.save()
+	t := r.tabs[r.cur]
+	rest := make([]*tab, 0, len(r.tabs))
+	rest = append(rest, r.tabs[:r.cur]...)
+	rest = append(rest, r.tabs[r.cur+1:]...)
+	i = min(max(i, 0), len(rest))
+	moved := make([]*tab, 0, len(r.tabs))
+	moved = append(moved, rest[:i]...)
+	moved = append(moved, t)
+	moved = append(moved, rest[i:]...)
+	r.tabs = moved
+	r.cur = i
+	r.layout()
+}
+
+// tabBar renders the tab line and the x-range of each tab (for clicks).
+func (r *Root) tabBar() (string, [][2]int) {
+	st := r.focus.st
+	var b strings.Builder
+	var spans [][2]int
+	x := 0
+	for i, t := range r.tabs {
+		f := t.focus
+		label := r.app.Reg.Display(f.currentEngine())
+		if q := strings.TrimSpace(f.plan.Query.Text); q != "" {
+			label += ": " + q
+		}
+		label = fmt.Sprintf(" %d %s ", i+1, truncate(label, 24))
+		w := lipgloss.Width(label)
+		if x+w > r.width {
+			break
+		}
+		if i == r.cur {
+			b.WriteString(st.accent.Underline(true).Render(label))
+		} else {
+			b.WriteString(st.muted.Render(label))
+		}
+		spans = append(spans, [2]int{x, x + w})
+		x += w
+	}
+	return b.String(), spans
+}
+
+// ---------------------------------------------------------------- resize
+
+// resize changes the focused pane's height (or width when vertical) to n,
+// or by n when relative. The size belongs to the nearest enclosing split
+// in that direction.
+func (r *Root) resize(n int, relative, vertical bool) {
+	dir := splitStacked
+	if vertical {
+		dir = splitSideBySide
+	}
+	c := r.leaf(r.focus)
+	for c.parent != nil && c.parent.dir != dir {
+		c = c.parent
+	}
+	if c.parent == nil {
+		return // no split in that direction
+	}
+	cur := r.subtreeSize(c, vertical)
+	if relative {
+		n += cur
+	}
+	c.size = max(n, 1)
+	r.layout()
+}
+
+func (r *Root) subtreeSize(n *node, vertical bool) int {
+	for n.pane == nil {
+		n = n.children[0]
+	}
+	if vertical {
+		return r.rects[n.pane].w
+	}
+	return r.rects[n.pane].h
+}
+
+// equalize resets every split to equal sizes (ctrl+w =).
+func (r *Root) equalize() {
+	var walk func(n *node)
+	walk = func(n *node) {
+		n.size = 0
+		for _, c := range n.children {
+			walk(c)
+		}
+	}
+	walk(r.tree)
 	r.layout()
 }
 
@@ -325,9 +600,50 @@ func (r *Root) windowCommand(k string) tea.Cmd {
 	case "o", "ctrl+o":
 		r.only()
 	case "=":
-		r.layout() // splits are always equal-sized
+		r.equalize()
+	case "+":
+		r.resize(1, true, false)
+	case "-":
+		r.resize(-1, true, false)
+	case ">":
+		r.resize(2, true, true)
+	case "<":
+		r.resize(-2, true, true)
+	case "_":
+		r.resize(r.height, false, false)
+	case "|":
+		r.resize(r.width, false, true)
+	case "n", "ctrl+n":
+		return r.splitWith(splitStacked, false, true, "")
+	case "T":
+		// Move the pane to a new tab.
+		if len(r.panes()) > 1 {
+			p := r.focus
+			r.detach(p)
+			return r.newTab(p, "")
+		}
 	}
 	return nil
+}
+
+// detach removes p from the current tab's tree without closing it.
+func (r *Root) detach(p *Model) {
+	n := r.leaf(p)
+	par := n.parent
+	idx := indexOf(par.children, n)
+	par.children = append(par.children[:idx], par.children[idx+1:]...)
+	if len(par.children) == 1 {
+		only := par.children[0]
+		par.pane, par.dir, par.children = only.pane, only.dir, only.children
+		for _, c := range par.children {
+			c.parent = par
+		}
+	}
+	sib := par
+	for sib.pane == nil {
+		sib = sib.children[min(idx, len(sib.children)-1)]
+	}
+	r.focus = sib.pane
 }
 
 // ---------------------------------------------------------------- tea.Model
@@ -345,6 +661,17 @@ func (r *Root) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return r, r.handleKey(msg)
 
 	case tea.MouseMsg:
+		if len(r.tabs) > 1 && msg.Y == 0 {
+			if msg.Button == tea.MouseButtonLeft && msg.Action == tea.MouseActionPress {
+				_, spans := r.tabBar()
+				for i, sp := range spans {
+					if msg.X >= sp[0] && msg.X < sp[1] {
+						r.switchTab(i)
+					}
+				}
+			}
+			return r, nil
+		}
 		for p, rc := range r.rects {
 			if rc.contains(msg.X, msg.Y) {
 				if p != r.focus && msg.Button == tea.MouseButtonLeft && msg.Action == tea.MouseActionPress {
@@ -371,7 +698,7 @@ func (r *Root) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	// Spinner ticks, cursor blinks and the like carry their own ids; every
 	// pane ignores the ones that are not its own.
 	var cmds []tea.Cmd
-	for _, p := range r.panes() {
+	for _, p := range r.allPanes() {
 		_, cmd := p.Update(msg)
 		cmds = append(cmds, cmd)
 	}
@@ -379,6 +706,19 @@ func (r *Root) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 func (r *Root) handleKey(msg tea.KeyMsg) tea.Cmd {
+	if r.cmd.active {
+		return r.cmdKey(msg)
+	}
+	// Characters that arrive in one burst (fast typing, tmux send-keys, a
+	// slow link) can come as a single multi-rune key message. Outside text
+	// input, vim keys must be handled one at a time ("gt", "ew", "5j").
+	if msg.Type == tea.KeyRunes && len(msg.Runes) > 1 && !msg.Paste && r.focus.mode != modeInsert {
+		var cmds []tea.Cmd
+		for _, c := range msg.Runes {
+			cmds = append(cmds, r.handleKey(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{c}, Alt: msg.Alt}))
+		}
+		return tea.Batch(cmds...)
+	}
 	if msg.String() == "ctrl+c" {
 		return tea.Quit
 	}
@@ -393,9 +733,13 @@ func (r *Root) handleKey(msg tea.KeyMsg) tea.Cmd {
 	}
 	// Pane commands are available outside the search bar (where ctrl+w
 	// deletes a word, as in vim's insert mode) and outside the picker.
-	if p.mode != modeInsert && !p.picker.open {
+	if p.mode != modeInsert && p.mode != modeVisual && !p.picker.open && !p.hint.active && len(p.pending) == 0 {
 		k := p.keys
 		switch {
+		case k.is(msg, ActCommand):
+			p.count = 0
+			r.openCmd("")
+			return nil
 		case k.is(msg, ActWindow):
 			r.pending = true
 			r.layout()
@@ -422,6 +766,10 @@ func (r *Root) forward(p *Model, msg tea.Msg) tea.Cmd {
 		p.quitRequested = false
 		return r.close(p)
 	}
+	if c := p.rootCmd; c != "" {
+		p.rootCmd = ""
+		return tea.Batch(cmd, r.execute(c))
+	}
 	return cmd
 }
 
@@ -429,7 +777,18 @@ func (r *Root) View() string {
 	if r.width <= 0 || r.height <= 0 {
 		return ""
 	}
-	return r.render(r.tree)
+	out := r.render(r.tree)
+	if len(r.tabs) > 1 {
+		bar, _ := r.tabBar()
+		out = lipgloss.NewStyle().Width(r.width).MaxWidth(r.width).Render(bar) + "\n" + out
+	}
+	if r.cmd.active {
+		// The command line replaces the bottom row, like vim's.
+		lines := strings.Split(out, "\n")
+		lines[len(lines)-1] = r.cmdView()
+		out = strings.Join(lines, "\n")
+	}
+	return out
 }
 
 func (r *Root) render(n *node) string {

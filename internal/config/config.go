@@ -66,8 +66,10 @@ type UI struct {
 	Layout        string `toml:"layout"` // auto | split | stacked
 	SplitMinWidth int    `toml:"split_min_width"`
 	SnippetLines  int    `toml:"snippet_lines"`
-	StatusBar     *bool  `toml:"status_bar"`
-	ShowSummary   *bool  `toml:"show_summary"`
+	// HintChars are the characters used for f/F result hint labels.
+	HintChars   string `toml:"hint_chars"`
+	StatusBar   *bool  `toml:"status_bar"`
+	ShowSummary *bool  `toml:"show_summary"`
 	// Theme is a built-in palette name (see `search --list-themes`).
 	Theme string `toml:"theme"`
 	// Colors overrides individual theme colours (hex or ANSI 0-255).

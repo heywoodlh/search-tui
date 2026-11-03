@@ -14,6 +14,7 @@ import (
 	"github.com/charmbracelet/bubbles/textinput"
 	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/lipgloss"
 	"github.com/heywoodlh/tui-search/internal/app"
 	"github.com/heywoodlh/tui-search/internal/engine"
 	"github.com/heywoodlh/tui-search/internal/safe"
@@ -27,6 +28,7 @@ const (
 	modeNormal
 	modeDetail
 	modeHelp
+	modeVisual
 )
 
 // Model is one search pane: an independent search session with its own
@@ -42,6 +44,16 @@ type Model struct {
 	windowPending bool
 	// multi is true when more than one pane is open (adds pane hints).
 	multi bool
+	// rootCmd asks the root to run an ex command (tab switching etc.).
+	rootCmd string
+
+	// Vim-style key state: a pending count (5j) and multi-key sequence (gg).
+	count   int
+	pending []string
+	hint    hintState
+	vis     visualState
+	// helpSections maps help topics to their line in the help view.
+	helpSections map[string]int
 
 	app  *app.App
 	keys keyMap
@@ -632,30 +644,81 @@ func (m *Model) handleKey(msg tea.KeyMsg) tea.Cmd {
 		return cmd
 	}
 
+	if m.hint.active {
+		return m.hintKey(msg)
+	}
+	if m.mode == modeVisual {
+		return m.visualKey(msg)
+	}
+
+	// Vim-style counts (5j, 3G) and multi-key sequences (gg, gt).
+	var key fmt.Stringer = msg
+	s := msg.String()
+	if len(m.pending) == 0 && len(s) == 1 && s[0] >= '0' && s[0] <= '9' && (s != "0" || m.count > 0) && !k.isExact(s) {
+		m.count = min(m.count*10+int(s[0]-'0'), 9999)
+		return nil
+	}
+	if len(m.pending) > 0 {
+		seq := strings.Join(append(m.pending, s), " ")
+		switch {
+		case k.isPrefix(seq) && !k.isExact(seq):
+			m.pending = append(m.pending, s)
+			return nil
+		case k.isExact(seq):
+			m.pending = nil
+			key = seqKey(seq)
+		default:
+			// Unknown sequence: drop it, as vim does.
+			m.pending, m.count = nil, 0
+			return nil
+		}
+	} else if k.isPrefix(s) && !k.isExact(s) {
+		m.pending = []string{s}
+		return nil
+	}
+	n, counted := max(m.count, 1), m.count > 0
+	m.count = 0
+
+	switch {
+	case k.is(key, ActVisual), k.is(key, ActVisualLine):
+		return m.enterVisual(k.is(key, ActVisualLine))
+	case k.is(key, ActHint), k.is(key, ActHintOpen):
+		return m.startHint(k.is(key, ActHintOpen))
+	case k.is(key, ActNextTab):
+		m.rootCmd = "tabnext"
+		if counted {
+			m.rootCmd = fmt.Sprintf("tabnext %d", n)
+		}
+		return nil
+	case k.is(key, ActPrevTab):
+		m.rootCmd = fmt.Sprintf("tabprevious %d", n)
+		return nil
+	}
+
 	// Normal and detail modes share most bindings.
 	switch {
-	case k.is(msg, ActQuit):
+	case k.is(key, ActQuit):
 		if m.mode == modeDetail {
 			m.mode = modeNormal
 			return nil
 		}
 		m.quitRequested = true
 		return tea.Quit
-	case k.is(msg, ActHelp):
+	case k.is(key, ActHelp):
 		m.prev = m.mode
 		m.mode = modeHelp
 		m.refreshHelp()
 		return nil
-	case k.is(msg, ActSearch):
+	case k.is(key, ActSearch):
 		m.mode = modeInsert
 		m.input.Focus()
 		m.input.CursorEnd()
 		return textinput.Blink
-	case k.is(msg, ActCompose):
+	case k.is(key, ActCompose):
 		return m.compose()
-	case k.is(msg, ActBack):
+	case k.is(key, ActBack):
 		return m.back()
-	case k.is(msg, ActCloseDetails):
+	case k.is(key, ActCloseDetails):
 		if m.mode == modeDetail {
 			m.mode = modeNormal
 		}
@@ -664,22 +727,22 @@ func (m *Model) handleKey(msg tea.KeyMsg) tea.Cmd {
 
 	if m.mode == modeDetail {
 		switch {
-		case k.is(msg, ActDown):
-			m.detail.ScrollDown(1)
+		case k.is(key, ActDown):
+			m.detail.ScrollDown(n)
 			return nil
-		case k.is(msg, ActUp):
-			m.detail.ScrollUp(1)
+		case k.is(key, ActUp):
+			m.detail.ScrollUp(n)
 			return nil
-		case k.is(msg, ActPageDown):
+		case k.is(key, ActPageDown):
 			m.detail.HalfPageDown()
 			return nil
-		case k.is(msg, ActPageUp):
+		case k.is(key, ActPageUp):
 			m.detail.HalfPageUp()
 			return nil
-		case k.is(msg, ActTop):
+		case k.is(key, ActTop):
 			m.detail.GotoTop()
 			return nil
-		case k.is(msg, ActBottom):
+		case k.is(key, ActBottom):
 			m.detail.GotoBottom()
 			return nil
 		case msg.String() == "enter":
@@ -691,37 +754,42 @@ func (m *Model) handleKey(msg tea.KeyMsg) tea.Cmd {
 
 	r, hasResult := m.current()
 	switch {
-	case k.is(msg, ActDown):
-		m.move(1)
-	case k.is(msg, ActUp):
-		m.move(-1)
-	case k.is(msg, ActTop):
-		m.move(-len(m.results))
-	case k.is(msg, ActBottom):
-		m.move(len(m.results))
-	case k.is(msg, ActPageDown):
-		m.move(max(m.listHeight()/m.itemHeightGuess(), 1))
-	case k.is(msg, ActPageUp):
-		m.move(-max(m.listHeight()/m.itemHeightGuess(), 1))
-	case k.is(msg, ActDetails):
+	case k.is(key, ActDown):
+		m.move(n)
+	case k.is(key, ActUp):
+		m.move(-n)
+	case k.is(key, ActTop), k.is(key, ActBottom):
+		switch {
+		case counted:
+			m.jump(n - 1) // 5G / 5gg: result 5
+		case k.is(key, ActTop):
+			m.move(-len(m.results))
+		default:
+			m.move(len(m.results))
+		}
+	case k.is(key, ActPageDown):
+		m.move(n * max(m.listHeight()/m.itemHeightGuess(), 1))
+	case k.is(key, ActPageUp):
+		m.move(-n * max(m.listHeight()/m.itemHeightGuess(), 1))
+	case k.is(key, ActDetails):
 		if hasResult {
 			m.mode = modeDetail
 			m.refreshDetail()
 			m.detail.GotoTop()
 		}
-	case k.is(msg, ActOpen):
+	case k.is(key, ActOpen):
 		if hasResult {
 			return m.openURL(r.URL)
 		}
-	case k.is(msg, ActOpenSearchPage):
+	case k.is(key, ActOpenSearchPage):
 		if m.plan.Engine != nil {
 			return m.openURL(m.plan.Engine.SearchURL(m.plan.Query))
 		}
-	case k.is(msg, ActYankURL):
+	case k.is(key, ActYankURL):
 		if hasResult {
 			return m.copy(r.URL, "URL")
 		}
-	case k.is(msg, ActYankSnippet):
+	case k.is(key, ActYankSnippet):
 		if hasResult {
 			what := "snippet"
 			if r.Code != nil {
@@ -729,19 +797,19 @@ func (m *Model) handleKey(msg tea.KeyMsg) tea.Cmd {
 			}
 			return m.copy(app.SnippetText(r), what)
 		}
-	case k.is(msg, ActYankMarkdown):
+	case k.is(key, ActYankMarkdown):
 		if hasResult {
 			return m.copy(fmt.Sprintf("[%s](%s)", r.Title, r.URL), "Markdown link")
 		}
-	case k.is(msg, ActEdit):
+	case k.is(key, ActEdit):
 		return m.editCurrent()
-	case k.is(msg, ActEditResults):
+	case k.is(key, ActEditResults):
 		if len(m.results) > 0 {
 			s := m.summary
 			s.Text = m.extSummary
 			return m.editContent("results.md", app.ResultsMarkdown(m.plan.Query.Text, m.plan.Engine.Name(), m.plan.Query.Kind, m.plan.Query.Page, m.results, s), 0)
 		}
-	case k.is(msg, ActSummarizePage):
+	case k.is(key, ActSummarizePage):
 		if hasResult {
 			if r.Code != nil {
 				return m.setFlash("summaries apply to web pages; press e to open the file")
@@ -752,26 +820,26 @@ func (m *Model) handleKey(msg tea.KeyMsg) tea.Cmd {
 			delete(m.pageErrs, r.URL)
 			return m.fetchPage(r.URL, "")
 		}
-	case k.is(msg, ActToggleSummary):
+	case k.is(key, ActToggleSummary):
 		m.showSummary = !m.showSummary
 		m.ensureVisible()
-	case k.is(msg, ActNextPage):
+	case k.is(key, ActNextPage):
 		if m.plan.Engine != nil {
 			m.opts.Page = m.plan.Query.Page + 1
 			return m.rerunPage()
 		}
-	case k.is(msg, ActPrevPage):
+	case k.is(key, ActPrevPage):
 		if m.plan.Engine != nil && m.plan.Query.Page > 1 {
 			m.opts.Page = m.plan.Query.Page - 1
 			return m.rerunPage()
 		}
-	case k.is(msg, ActNextEngine):
+	case k.is(key, ActNextEngine):
 		m.openPicker(0)
-	case k.is(msg, ActPrevEngine):
+	case k.is(key, ActPrevEngine):
 		m.openPicker(0)
-	case k.is(msg, ActCycleType):
+	case k.is(key, ActCycleType):
 		return m.typeCycle()
-	case k.is(msg, ActRefresh):
+	case k.is(key, ActRefresh):
 		m.opts.Page = m.plan.Query.Page
 		return m.rerun()
 	}
@@ -901,19 +969,16 @@ func truncate(s string, n int) string {
 	return s
 }
 
-// back steps out one level: details → results → start page (no results,
-// empty search bar). On the start page it toggles between the search bar
-// and normal mode.
+// back steps out one level in normal mode: details → results → start page
+// (no results, empty search bar). It never enters insert mode; on the start
+// page it does nothing (press / or i to type).
 func (m *Model) back() tea.Cmd {
+	m.pending, m.count = nil, 0
 	switch {
 	case m.mode == modeDetail:
 		m.mode = modeNormal
 	case len(m.results) > 0 || m.plan.Engine != nil || m.err != nil || m.loading:
 		m.reset()
-	default:
-		m.mode = modeInsert
-		m.input.Focus()
-		return textinput.Blink
 	}
 	return nil
 }
@@ -930,7 +995,60 @@ func (m *Model) reset() {
 	m.setResults(nil)
 	m.histIdx = len(m.history)
 	m.input.SetValue("")
-	m.mode = modeInsert
-	m.input.Focus()
+	m.mode = modeNormal
+	m.input.Blur()
 	m.refreshDetail()
+}
+
+// jump selects result i (clamped).
+func (m *Model) jump(i int) {
+	if len(m.results) == 0 {
+		return
+	}
+	m.sel = min(max(i, 0), len(m.results)-1)
+	m.ensureVisible()
+	m.refreshDetail()
+}
+
+// showText shows a titled list in the help view (used by :engines, :bangs,
+// :history and :theme).
+func (m *Model) showText(title string, lines []string) {
+	if m.mode != modeHelp {
+		m.prev = m.mode
+	}
+	m.mode = modeHelp
+	body := m.st.accent.Render(title) + "\n\n" + strings.Join(lines, "\n")
+	m.help.SetContent(lipgloss.NewStyle().Padding(0, 2).Render(body))
+	m.help.GotoTop()
+}
+
+// showHelp opens the help view, scrolled to a topic heading.
+func (m *Model) showHelp(topic string) {
+	if m.mode != modeHelp {
+		m.prev = m.mode
+	}
+	m.mode = modeHelp
+	m.refreshHelp()
+	m.help.GotoTop()
+	if line, ok := m.helpSections[strings.ToLower(topic)]; ok {
+		m.help.SetYOffset(line)
+	}
+}
+
+// runKeyAction runs a normal-mode action as if its key had been pressed.
+func (m *Model) runKeyAction(a Action) tea.Cmd {
+	b := m.keys.b[a]
+	ks := b.Keys()
+	if len(ks) == 0 {
+		return nil
+	}
+	saved := m.mode
+	if m.mode == modeInsert || m.mode == modeHelp {
+		m.mode = modeNormal
+	}
+	cmd := m.handleKey(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune(strings.ReplaceAll(ks[0], " ", ""))})
+	if m.mode == modeNormal && saved == modeHelp {
+		m.mode = saved
+	}
+	return cmd
 }

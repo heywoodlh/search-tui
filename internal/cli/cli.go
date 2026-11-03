@@ -187,6 +187,7 @@ Flags:
 		query = strings.TrimSpace(string(b))
 	}
 	if o.tui || query == "" {
+		tui.Version = version()
 		return tui.Run(a, query, popts)
 	}
 

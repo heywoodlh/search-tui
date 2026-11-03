@@ -182,3 +182,11 @@ func Fg(col lipgloss.TerminalColor) lipgloss.Style {
 	}
 	return s
 }
+
+// NameOr returns the canonical name of a theme, or "default".
+func NameOr(name string) string {
+	if t, ok := Get(name); ok {
+		return t.Name
+	}
+	return "default"
+}

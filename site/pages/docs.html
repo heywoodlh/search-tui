@@ -35,9 +35,14 @@ Queries can be piped in: echo "zig allocators" | search -m
 
     / i ctrl+l        edit the query (search bar)
     enter l → space   result details      (enter in details: open)
-    j k ↓ ↑           move / scroll       g G home end   first / last
+    j k ↓ ↑           move / scroll       gg G home end  first / last (5G: result 5)
     ctrl+d ctrl+u     page down / up
-    esc               back: details → results → start page
+    esc               in the search bar: normal mode; otherwise back one level
+                      (details → results → start page)
+    :                 command line (:help commands)
+    v / V             visual mode: select text in the details, y copies
+    f / F             hints: type a result's label to jump to / open it
+    gt / gT           next / previous tab
     h ←               close details
     o / O             open result / search page in the browser
     y / Y / M         copy URL / snippet or code / Markdown link
@@ -58,6 +63,24 @@ Panes, as in vim (outside the search bar):
     ctrl+w w / W      next / previous pane
     ctrl+w q / c      close the pane
     ctrl+w o          only this pane
+    ctrl+w + - < >    resize            ctrl+w =  equal sizes
+    ctrl+w T          move the pane to a new tab
+
+Counts work like vim: 5j, 3G, 2gt.
+
+Command line (:), as in vim and iamb. Tab completes, abbreviations work:
+
+    :q  :qa  :close  :only            quit / close panes
+    :sp :vs :new :vnew [query]        split (with a query: search in it)
+    :resize [+-]N  :vert resize N     pane sizes
+    :vert :aboveleft :tab {cmd}       placement modifiers
+    :tabnew :tabc :tabo :tabn :tabp   tabs (also gt / gT)
+    :search :engine :type :page       searching
+    :open :yank :copy :edit [N]       act on result N
+    :summarise :export :compose       pages and $EDITOR
+    :help :theme :set :engines        interface
+    :bangs :history :version
+    :N                                jump to result N
 
 Mouse: wheel scrolls, click selects, click again for details. Rebind anything under [keys], e.g.  open = ["o", "enter"]
 

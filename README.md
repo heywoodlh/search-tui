@@ -179,9 +179,9 @@ Queries can also come from stdin: `echo "rust lifetimes" | search -m`.
 | `/`, `i`, `ctrl+l` | jump to the search bar to edit the query (like a browser URL bar) |
 | `enter`, `l`, `→`, `space` | result details (in the details view, `enter` opens the browser) |
 | `j`/`k`, `↓`/`↑` | move down/up, or scroll |
-| `g`/`G`, `home`/`end` | first/last result |
+| `gg`/`G`, `home`/`end` | first/last result; with a count (`5G`, `5gg`), result N |
 | `ctrl+d`/`ctrl+u`, `pgdn`/`pgup` | page down/up |
-| `esc` | back: details → results → start page (no results) |
+| `esc` | in the search bar: back to normal mode only. In normal mode: back one level, details → results → start page |
 | `h`, `←` | close the details view |
 | `o` / `O` | open the result / the engine's search page in the browser |
 | `y` / `Y` / `M` | copy the URL / snippet or code / Markdown link |
@@ -194,7 +194,11 @@ Queries can also come from stdin: `echo "rust lifetimes" | search -m`.
 | `t` | cycle search type (web → code → repos → issues) |
 | `ctrl+e`, `c` | compose the query in `$EDITOR` |
 | `r` | re-run the search |
-| `?` | help (all bindings and bangs) |
+| `?` | help (all bindings, commands and bangs) |
+| `:` | command line (see below) |
+| `v` / `V` | visual mode: select text in the details, `y` copies it |
+| `f` / `F` | hints: label visible results; type a label to jump to it / open it |
+| `gt` / `gT` | next / previous tab (`Ngt`: tab N) |
 | `ctrl+w` … | pane commands (see below) |
 | `q` / `ctrl+c` | close the pane (quit when it is the last one) / quit |
 
@@ -228,6 +232,52 @@ status line is highlighted.
 - **Search bar:** pane commands work outside it; inside, `ctrl+w` deletes a word as in vim's insert mode.
 - **Mouse:** clicking a pane focuses it.
 - **Keys:** the `ctrl+w` prefix is the `window` action in `[keys]`. You can also bind `split_horizontal`, `split_vertical`, `focus_next_pane` and `close_pane` directly.
+- **More `ctrl+w` keys:** `n` new empty pane, `T` move the pane to a new tab,
+  `+`/`-` and `<`/`>` resize, `_`/`|` maximise, `=` equal sizes.
+
+**Counts:** like vim, a number before a key repeats or targets it: `5j`
+moves five results, `3G` goes to result 3, `2gt` goes to tab 2. The status
+bar shows the count and any pending keys. Keys in `[keys]` can be
+sequences, e.g. `top = ["gg"]`.
+
+**Hints (`f`/`F`):** as in Vimium or qutebrowser, `f` labels each visible
+result with home-row letters (`hint_chars` in `[ui]`). Type a label to jump
+to that result and show its details; `F` opens it in the browser instead.
+
+**Visual mode (`v`/`V`):** select text in the selected result's details,
+including its title, URL, snippet or code, and the fetched page. Use vim
+motions:
+
+- `h` `j` `k` `l`, `w` `b` `e`, `0` `^` `$`
+- `gg` `G`, `ctrl+d` `ctrl+u`
+- `f` `F` `t` `T` + a character, with `;` and `,` to repeat
+- counts, and `o` to jump to the other end of the selection
+
+`y` copies the selection and `Y` copies whole lines. `v` and `V` switch
+between selecting characters and lines. The selection is shown with
+underlined accent-coloured text, not a background.
+
+**Command line (`:`):** vim/[iamb](https://iamb.chat)-style commands. Tab
+completes command names and arguments, `↑`/`↓` recall history, and
+abbreviations work (`:sp`, `:vs`, `:tabn`). `:N` jumps to result N.
+`:help commands` lists everything.
+
+| Command | Action |
+| --- | --- |
+| `:q[uit]`, `:qa[ll]` | close the pane (the tab, or quit, when it's the last) / quit everything |
+| `:clo[se]`, `:on[ly]` | close the pane (never the last) / close every other pane |
+| `:sp[lit] [query]`, `:vs[plit] [query]` | split below / to the right, copying this search or running query |
+| `:new [query]`, `:vne[w] [query]` | new empty pane below / to the right |
+| `:res[ize] [+-]N` | pane height (with `:vertical`, the width) |
+| `:vert[ical]`, `:abo[veleft]`, `:bel[owright]`, `:tab` | modifiers: `:vert new rust`, `:abo split`, `:tab split` |
+| `:tabnew [query]`, `:tabc[lose]`, `:tabo[nly]` | new tab / close tab / close other tabs |
+| `:tabn[ext] [N]`, `:tabp[revious]`, `:tabfir[st]`, `:tabl[ast]`, `:tabm[ove] [N]` | tab navigation and ordering |
+| `:s[earch] {query}`, `:eng[ine] [name]`, `:ty[pe] [kind]` | search / switch engine (picker without a name) / set the type |
+| `:pa[ge] N`, `:n[ext]`, `:prev[ious]`, `:ref[resh]`, `:wel[come]` | pages / re-run / back to the start page |
+| `:o[pen] [N]`, `:ya[nk] [N]`, `:co[py] [N]`, `:e[dit] [N]`, `:sum[marise] [N]` | act on result N (default: the selected one) |
+| `:exp[ort]`, `:comp[ose]` | all results as Markdown in `$EDITOR` / write the query in `$EDITOR` |
+| `:h[elp] [topic]`, `:the[me] [name]`, `:se[t] {option}` | help, live theme switching, options (`summary`, `nosummary`, `layout=split`, `results=N`, ...) |
+| `:engines`, `:ban[gs]`, `:his[tory]`, `:ve[rsion]`, `:redr[aw]` | lists and utilities |
 
 Mouse: the wheel scrolls, a click selects a result, a second click opens its
 details, and clicking the query line edits it.
