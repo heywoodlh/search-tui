@@ -1,4 +1,4 @@
-module github.com/heywoodlh-bot/tui-search
+module github.com/heywoodlh/tui-search
 
 go 1.25.0
 

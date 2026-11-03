@@ -2,7 +2,7 @@
 
 # tui-search
 
-Website: <https://heywoodlh-bot.github.io/tui-search/> (also readable with `curl`).
+Website: <https://heywoodlh.github.io/tui-search/> (also readable with `curl`).
 
 `search` is a fast terminal client for web and code search. It has a full
 TUI and an inline CLI, DuckDuckGo-style `!bangs`, and summaries computed on
@@ -71,8 +71,8 @@ search -E                                # write the query in $EDITOR
 ### Nix
 
 ```sh
-nix run github:heywoodlh-bot/tui-search -- "hello world"
-nix profile install github:heywoodlh-bot/tui-search
+nix run github:heywoodlh/tui-search -- "hello world"
+nix profile install github:heywoodlh/tui-search
 ```
 
 The flake provides `packages.<system>.default`, `overlays.default`,
@@ -83,7 +83,7 @@ The flake provides `packages.<system>.default`, `overlays.default`,
 
 ```nix
 {
-  inputs.tui-search.url = "github:heywoodlh-bot/tui-search";
+  inputs.tui-search.url = "github:heywoodlh/tui-search";
   # ...
   home-manager.users.me = {
     imports = [ inputs.tui-search.homeManagerModules.default ];
@@ -116,8 +116,8 @@ of `settings` because they would end up in the Nix store. Use `*_file`,
 ### Go, including Windows
 
 ```sh
-# private repo: export GOPRIVATE=github.com/heywoodlh-bot/*
-go install github.com/heywoodlh-bot/tui-search/cmd/search@latest
+# private repo: export GOPRIVATE=github.com/heywoodlh/*
+go install github.com/heywoodlh/tui-search/cmd/search@latest
 ```
 
 On Windows the config file lives at `%AppData%\tui-search\config.toml`. The

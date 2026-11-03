@@ -7,7 +7,7 @@ import (
 
 	"github.com/charmbracelet/lipgloss"
 	"github.com/charmbracelet/x/ansi"
-	"github.com/heywoodlh-bot/tui-search/internal/engine"
+	"github.com/heywoodlh/tui-search/internal/engine"
 )
 
 type layoutKind int

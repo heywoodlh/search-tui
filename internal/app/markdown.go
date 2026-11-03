@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/heywoodlh-bot/tui-search/internal/engine"
+	"github.com/heywoodlh/tui-search/internal/engine"
 )
 
 // ResultsMarkdown renders a result set (and optional summary) as Markdown,

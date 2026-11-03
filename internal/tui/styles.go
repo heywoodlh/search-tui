@@ -2,8 +2,8 @@ package tui
 
 import (
 	"github.com/charmbracelet/lipgloss"
-	"github.com/heywoodlh-bot/tui-search/internal/config"
-	"github.com/heywoodlh-bot/tui-search/internal/theme"
+	"github.com/heywoodlh/tui-search/internal/config"
+	"github.com/heywoodlh/tui-search/internal/theme"
 )
 
 // styles only ever set foreground colours and text attributes, never a

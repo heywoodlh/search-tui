@@ -16,7 +16,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/heywoodlh-bot/tui-search/internal/config"
+	"github.com/heywoodlh/tui-search/internal/config"
 )
 
 func codeQuery(q Query, langKey, repoKey string) string {

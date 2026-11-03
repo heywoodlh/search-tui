@@ -14,9 +14,9 @@ import (
 	"github.com/charmbracelet/bubbles/textinput"
 	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
-	"github.com/heywoodlh-bot/tui-search/internal/app"
-	"github.com/heywoodlh-bot/tui-search/internal/engine"
-	"github.com/heywoodlh-bot/tui-search/internal/sys"
+	"github.com/heywoodlh/tui-search/internal/app"
+	"github.com/heywoodlh/tui-search/internal/engine"
+	"github.com/heywoodlh/tui-search/internal/sys"
 )
 
 type mode int

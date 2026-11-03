@@ -16,7 +16,7 @@ base="${2:?usage: build.sh OUT_DIR BASE_URL [DEMO_DIR]}"
 demo="${3:-}"
 base="${base%/}/"
 here="$(cd "$(dirname "$0")" && pwd)"
-repo="https://github.com/heywoodlh-bot/tui-search"
+repo="https://github.com/heywoodlh/tui-search"
 
 rm -rf "$out"
 mkdir -p "$out"

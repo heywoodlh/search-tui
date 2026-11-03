@@ -12,11 +12,11 @@ import (
 	"sync"
 	"time"
 
-	"github.com/heywoodlh-bot/tui-search/internal/bang"
-	"github.com/heywoodlh-bot/tui-search/internal/config"
-	"github.com/heywoodlh-bot/tui-search/internal/engine"
-	"github.com/heywoodlh-bot/tui-search/internal/summary"
-	"github.com/heywoodlh-bot/tui-search/internal/theme"
+	"github.com/heywoodlh/tui-search/internal/bang"
+	"github.com/heywoodlh/tui-search/internal/config"
+	"github.com/heywoodlh/tui-search/internal/engine"
+	"github.com/heywoodlh/tui-search/internal/summary"
+	"github.com/heywoodlh/tui-search/internal/theme"
 )
 
 // App is the shared application core.

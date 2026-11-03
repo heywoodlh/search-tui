@@ -21,7 +21,7 @@ jobs:
           for t in linux/amd64 linux/arm64 darwin/arm64 windows/amd64 windows/arm64 freebsd/amd64; do
             os=${t%/*}; arch=${t#*/}; ext=""; [ "$os" = windows ] && ext=.exe
             GOOS=$os GOARCH=$arch CGO_ENABLED=0 go build -trimpath \
-              -ldflags "-s -w -X github.com/heywoodlh-bot/tui-search/internal/cli.Version=${GITHUB_REF_NAME#v}" \
+              -ldflags "-s -w -X github.com/heywoodlh/tui-search/internal/cli.Version=${GITHUB_REF_NAME#v}" \
               -o "dist/search-$os-$arch$ext" ./cmd/search
           done
           (cd dist && sha256sum -- * > SHA256SUMS)

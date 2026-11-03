@@ -14,12 +14,12 @@ import (
 
 	"github.com/charmbracelet/lipgloss"
 	"github.com/charmbracelet/x/term"
-	"github.com/heywoodlh-bot/tui-search/internal/app"
-	"github.com/heywoodlh-bot/tui-search/internal/config"
-	"github.com/heywoodlh-bot/tui-search/internal/engine"
-	"github.com/heywoodlh-bot/tui-search/internal/sys"
-	"github.com/heywoodlh-bot/tui-search/internal/theme"
-	"github.com/heywoodlh-bot/tui-search/internal/tui"
+	"github.com/heywoodlh/tui-search/internal/app"
+	"github.com/heywoodlh/tui-search/internal/config"
+	"github.com/heywoodlh/tui-search/internal/engine"
+	"github.com/heywoodlh/tui-search/internal/sys"
+	"github.com/heywoodlh/tui-search/internal/theme"
+	"github.com/heywoodlh/tui-search/internal/tui"
 	flag "github.com/spf13/pflag"
 )
 

@@ -9,7 +9,7 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/heywoodlh-bot/tui-search/internal/config"
+	"github.com/heywoodlh/tui-search/internal/config"
 )
 
 // Kind is the type of search to perform.

@@ -5,7 +5,7 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/heywoodlh-bot/tui-search/internal/engine"
+	"github.com/heywoodlh/tui-search/internal/engine"
 )
 
 // Target is what a bang resolves to.

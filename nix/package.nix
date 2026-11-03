@@ -27,12 +27,12 @@ buildGoModule {
   ldflags = [
     "-s"
     "-w"
-    "-X github.com/heywoodlh-bot/tui-search/internal/cli.Version=${version}"
+    "-X github.com/heywoodlh/tui-search/internal/cli.Version=${version}"
   ];
 
   meta = {
     description = "Terminal UI and CLI for web and code search engines";
-    homepage = "https://github.com/heywoodlh-bot/tui-search";
+    homepage = "https://github.com/heywoodlh/tui-search";
     license = lib.licenses.gpl3Only;
     mainProgram = "search";
     platforms = lib.platforms.unix ++ lib.platforms.windows;

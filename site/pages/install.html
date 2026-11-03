@@ -4,18 +4,18 @@
 
 Run it once:
 
-    nix run github:heywoodlh-bot/tui-search -- "hello world"
+    nix run github:heywoodlh/tui-search -- "hello world"
 
 Install into your profile:
 
-    nix profile install github:heywoodlh-bot/tui-search
+    nix profile install github:heywoodlh/tui-search
 
 Or add the flake as an input. It provides packages for x86_64-linux, aarch64-linux and aarch64-darwin, plus overlays.default.
 
 <h2>home-manager</h2>
 
     {
-      inputs.tui-search.url = "github:heywoodlh-bot/tui-search";
+      inputs.tui-search.url = "github:heywoodlh/tui-search";
 
       # in your home-manager configuration:
       imports = [ inputs.tui-search.homeManagerModules.default ];
@@ -37,7 +37,7 @@ settings takes every key of the TOML config and writes ~/.config/tui-search/conf
 
 <h2>Go</h2>
 
-    go install github.com/heywoodlh-bot/tui-search/cmd/search@latest
+    go install github.com/heywoodlh/tui-search/cmd/search@latest
 
 Needs Go 1.25 or newer. The binary is called search.
 

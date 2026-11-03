@@ -10,7 +10,7 @@ import (
 	"strings"
 
 	"github.com/PuerkitoBio/goquery"
-	"github.com/heywoodlh-bot/tui-search/internal/config"
+	"github.com/heywoodlh/tui-search/internal/config"
 )
 
 // base holds what every engine needs.
