@@ -199,9 +199,6 @@ func IsTerminalBrowser(args []string) bool {
 
 // OpenURL launches a graphical browser in the background.
 func OpenURL(configured, url string) error {
-	if UsesTerminalURL(configured) {
-		return OpenURLInTerminal(url)
-	}
 	args := BrowserCommand(configured, url)
 	c := exec.Command(args[0], args[1:]...)
 	c.Stdout, c.Stderr = nil, nil

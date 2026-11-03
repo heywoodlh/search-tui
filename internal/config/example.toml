@@ -17,8 +17,6 @@ low_power = false                 # fewer results, smaller downloads, no animati
 #                                 # like "Firefox" works. Unset: $BROWSER, then the system default
 #                                 # (xdg-open / open / Windows default / Termux). "default" forces the
 #                                 # system default. Terminal browsers (w3m, lynx, ...) run inside the TUI.
-#                                 # "terminal" asks the terminal (rootshell, iTerm2) to open links on
-#                                 # the device you are connecting from; auto-used over SSH from those.
 # editor = "nvim"                 # default: $VISUAL, $EDITOR
 clipboard = "auto"                # auto | osc52 | command | none
 # clipboard_command = "wl-copy"

@@ -368,25 +368,6 @@ Links open in, from highest priority:
 Terminal browsers (`w3m`, `lynx`, `links`, `elinks`, `browsh`, `carbonyl`,
 `chawan`) take over the terminal and return you to the TUI when they exit.
 
-### Opening links on your iPad or iPhone (rootshell, iTerm2)
-
-When `search` runs on a remote host and you connect from
-[rootshell](https://github.com/kitknox/rootshell) or iTerm2, it can ask the
-terminal to open links on *your* device instead of on the server. It does this
-with the `OSC 1337;OpenURL` escape sequence, and links open in the device's
-default browser.
-
-- **Automatic:** if no browser is configured and `$BROWSER` is unset, this is
-  used when the terminal is rootshell or iTerm2 (`LC_TERMINAL`, which OpenSSH
-  forwards by default) and the host has no local display (an SSH session).
-- **Explicit:** set `browser = "terminal"` (aliases: `rootshell`, `osc1337`,
-  `iterm2`), pass `--browser terminal`, or set `BROWSER=terminal`.
-- **rootshell setting:** turn on Settings → Terminal → **Open Links from
-  Programs** (it is off by default).
-- **tmux:** inside tmux the request is wrapped for passthrough, so run
-  `tmux set -g allow-passthrough on`.
-- **Only http(s) links** are sent.
-
 ## How summaries work
 
 `internal/summary` is a centroid-based multi-document summariser:
