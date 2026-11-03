@@ -2,12 +2,12 @@ search: web and code search in your terminal.
 
 A fast TUI and CLI for DuckDuckGo, Google, Bing, Kagi, Brave, GitHub, Sourcegraph and more, with DuckDuckGo-style !bangs, copyable code snippets and summaries computed on your own device. One small static binary for Linux, macOS and Windows, from a Raspberry Pi to a 4K monitor.
 
-
-In a terminal: asciinema play https://heywoodlh-bot.github.io/tui-search/pr-preview/pr-1/demo.cast
+(demo recording unavailable for this build)
+Watch: https://heywoodlh.github.io/tui-search/pr-preview/pr-1/demo.mp4 (or demo.webm)
 
 Try it
 
-    nix run github:heywoodlh-bot/tui-search -- "nixos flakes tutorial"
+    nix run github:heywoodlh/tui-search -- "nixos flakes tutorial"
 
     search                               # open the TUI
     search "rust lifetimes"              # results + summary, inline
