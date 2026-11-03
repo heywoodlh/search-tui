@@ -74,10 +74,10 @@ Enter
 Wait+Screen /github·repos.*\n(.*\n)*.*NOR\s+1\//
 Sleep 2s
 
-# 4. Code search with a bang; open a result's details.
+# 4. Code search on Sourcegraph (no token or rate limit); open a result.
 Escape
 Wait+Screen /type a query/
-Type "tea.NewProgram !ghc"
+Type "tea.NewProgram lang:go !sg"
 Sleep 400ms
 Enter
 Wait+Screen /NOR\s+1\/\d+/

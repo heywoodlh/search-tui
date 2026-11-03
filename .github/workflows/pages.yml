@@ -59,7 +59,11 @@ jobs:
       - name: Build site
         run: |
           args=(_site "${{ steps.url.outputs.base }}")
-          [ -s "$RUNNER_TEMP/demo/demo.mp4" ] && args+=("$RUNNER_TEMP/demo")
+          if [ -s "$RUNNER_TEMP/demo/demo.mp4" ]; then
+            args+=("$RUNNER_TEMP/demo")
+          else
+            echo "::warning title=Demo not recorded::The VHS demo failed; the site was built without it. See the 'Record demo' step."
+          fi
           site/build.sh "${args[@]}"
 
       - name: Deploy
