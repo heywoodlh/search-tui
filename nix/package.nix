@@ -18,7 +18,7 @@ buildGoModule {
     ];
   };
 
-  vendorHash = "sha256-C5kTFqORbAqlzWAUf3zC+9KfHpAhq63P0/zgitBLu2U=";
+  vendorHash = "sha256-FmRynMiZOJ4hh27gCPN4pZmjuodt4WJ8yzPQW2B42js=";
 
   subPackages = [ "cmd/search" ];
 

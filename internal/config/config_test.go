@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"strings"
 	"testing"
 )
 
@@ -28,7 +29,9 @@ func TestExampleParses(t *testing.T) {
 func TestSecrets(t *testing.T) {
 	dir := t.TempDir()
 	f := filepath.Join(dir, "tok")
-	os.WriteFile(f, []byte("from-file\n"), 0o600)
+	if err := os.WriteFile(f, []byte("from-file\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
 	t.Setenv("TS_TEST_KEY", "from-env")
 	c, err := Parse(`
 [engines.a]
@@ -68,5 +71,36 @@ func TestLoadMissingDefault(t *testing.T) {
 	}
 	if _, err := Load(filepath.Join(t.TempDir(), "nope.toml")); err == nil {
 		t.Error("missing explicit config should error")
+	}
+}
+
+func TestSecretPermissionWarning(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("POSIX permissions")
+	}
+	p := filepath.Join(t.TempDir(), "config.toml")
+	if err := os.WriteFile(p, []byte("[engines.brave]\napi_key = \"literal\"\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	c, err := Load(p)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if w := c.secretPermissionWarning(); !strings.Contains(w, "brave") || !strings.Contains(w, "chmod 600") {
+		t.Errorf("expected a warning, got %q", w)
+	}
+	if err := os.Chmod(p, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if w := c.secretPermissionWarning(); w != "" {
+		t.Errorf("0600 should not warn: %q", w)
+	}
+	// Indirect credentials are fine at any mode.
+	if err := os.WriteFile(p, []byte("[engines.brave]\napi_key_command = \"pass show brave\"\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	c, _ = Load(p)
+	if w := c.secretPermissionWarning(); w != "" {
+		t.Errorf("*_command should not warn: %q", w)
 	}
 }

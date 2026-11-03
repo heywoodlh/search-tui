@@ -3,15 +3,18 @@ package engine
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"html"
 	"io"
 	"net/http"
+	"net/url"
 	"regexp"
 	"strings"
 
 	"github.com/PuerkitoBio/goquery"
 	"github.com/heywoodlh/tui-search/internal/config"
+	"github.com/heywoodlh/tui-search/internal/safe"
 )
 
 // Client is a small HTTP helper that enforces timeouts and body limits so
@@ -28,7 +31,7 @@ type Client struct {
 // NewClient creates a client from configuration.
 func NewClient(cfg *config.Config) *Client {
 	return &Client{
-		HTTP:       &http.Client{Timeout: cfg.TimeoutDuration()},
+		HTTP:       &http.Client{Timeout: cfg.TimeoutDuration(), CheckRedirect: checkRedirect},
 		UserAgent:  cfg.UserAgent,
 		MaxBody:    int64(cfg.MaxBodyKB) * 1024,
 		SafeSearch: strings.ToLower(cfg.SafeSearch),
@@ -75,15 +78,15 @@ func (c *Client) Do(ctx context.Context, r Request) ([]byte, http.Header, error)
 	}
 	resp, err := c.HTTP.Do(req)
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, redactErr(err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	body, err := io.ReadAll(io.LimitReader(resp.Body, c.MaxBody))
 	if err != nil {
 		return nil, nil, err
 	}
 	if resp.StatusCode < 200 || resp.StatusCode > 299 {
-		snippet := strings.TrimSpace(string(body))
+		snippet := safe.Line(strings.TrimSpace(string(body)))
 		if len(snippet) > 200 || strings.Contains(snippet, "<") {
 			snippet = ""
 		}
@@ -152,4 +155,39 @@ func hostOf(u string) string {
 		s = s[:i]
 	}
 	return s
+}
+
+// redactErr hides credentials that net/http includes in errors: *url.Error
+// embeds the full request URL, and some APIs take keys as query parameters.
+func redactErr(err error) error {
+	var ue *url.Error
+	if errors.As(err, &ue) {
+		ue.URL = safe.RedactURL(ue.URL)
+	}
+	return err
+}
+
+// redirectSafeHeaders survive a redirect to another host or to plain HTTP.
+var redirectSafeHeaders = map[string]bool{
+	"User-Agent": true, "Accept": true, "Accept-Language": true, "Content-Type": true, "Referer": true,
+}
+
+// checkRedirect limits redirects and strips credentials when one leaves the
+// original host or downgrades from https. net/http only drops Authorization
+// and Cookie on cross-domain redirects, but engines also authenticate with
+// custom headers (PRIVATE-TOKEN, X-Subscription-Token, ...), which it would
+// otherwise forward to the new host.
+func checkRedirect(req *http.Request, via []*http.Request) error {
+	if len(via) >= 10 {
+		return errors.New("stopped after 10 redirects")
+	}
+	orig := via[0].URL
+	if req.URL.Hostname() != orig.Hostname() || (orig.Scheme == "https" && req.URL.Scheme != "https") {
+		for k := range req.Header {
+			if !redirectSafeHeaders[http.CanonicalHeaderKey(k)] {
+				req.Header.Del(k)
+			}
+		}
+	}
+	return nil
 }

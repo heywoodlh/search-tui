@@ -11,12 +11,14 @@ import (
 	"os/signal"
 	"strings"
 	"text/tabwriter"
+	"time"
 
 	"github.com/charmbracelet/lipgloss"
 	"github.com/charmbracelet/x/term"
 	"github.com/heywoodlh/tui-search/internal/app"
 	"github.com/heywoodlh/tui-search/internal/config"
 	"github.com/heywoodlh/tui-search/internal/engine"
+	"github.com/heywoodlh/tui-search/internal/safe"
 	"github.com/heywoodlh/tui-search/internal/sys"
 	"github.com/heywoodlh/tui-search/internal/theme"
 	"github.com/heywoodlh/tui-search/internal/tui"
@@ -41,7 +43,7 @@ type options struct {
 // Main runs the CLI and returns the process exit code.
 func Main(args []string) int {
 	if err := run(args, os.Stdout, os.Stderr); err != nil {
-		fmt.Fprintln(os.Stderr, "search:", err)
+		fmt.Fprintln(os.Stderr, "search:", safe.Text(err.Error()))
 		return 1
 	}
 	return 0
@@ -198,11 +200,15 @@ Flags:
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt)
 	defer stop()
+	// Bound the whole search: streaming engines (Sourcegraph) have no HTTP
+	// client timeout and would otherwise wait forever on a stalled server.
+	ctx, cancel := context.WithTimeout(ctx, cfg.TimeoutDuration()+10*time.Second)
+	defer cancel()
 	rs, err := a.Search(ctx, &plan)
 	if err != nil {
 		var ae *engine.AuthError
 		if errors.As(err, &ae) {
-			return fmt.Errorf("%v\n(search URL: %s)", err, plan.Engine.SearchURL(plan.Query))
+			return fmt.Errorf("%w\n(search URL: %s)", err, plan.Engine.SearchURL(plan.Query))
 		}
 		return err
 	}
@@ -305,7 +311,7 @@ func composeQuery(cfg *config.Config, initial string) (string, error) {
 	if err := c.Run(); err != nil {
 		return "", fmt.Errorf("editor: %w", err)
 	}
-	b, err := os.ReadFile(p)
+	b, err := os.ReadFile(p) //nolint:gosec // G304: p is the temp file we just created
 	if err != nil {
 		return "", err
 	}

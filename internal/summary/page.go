@@ -102,9 +102,9 @@ func External(ctx context.Context, command, prompt string, timeout time.Duration
 	defer cancel()
 	var c *exec.Cmd
 	if runtime.GOOS == "windows" {
-		c = exec.CommandContext(ctx, "cmd", "/C", command)
+		c = exec.CommandContext(ctx, "cmd", "/C", command) //nolint:gosec // G204: user-configured summary command
 	} else {
-		c = exec.CommandContext(ctx, "sh", "-c", command)
+		c = exec.CommandContext(ctx, "sh", "-c", command) //nolint:gosec // G204: user-configured summary command
 	}
 	c.Stdin = strings.NewReader(prompt)
 	out, err := c.Output()

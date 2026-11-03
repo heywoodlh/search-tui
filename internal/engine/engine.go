@@ -10,6 +10,7 @@ import (
 	"strings"
 
 	"github.com/heywoodlh/tui-search/internal/config"
+	"github.com/heywoodlh/tui-search/internal/safe"
 )
 
 // Kind is the type of search to perform.
@@ -342,4 +343,21 @@ func (r *Registry) UnconfiguredByName(name string) (Unconfigured, bool) {
 		}
 	}
 	return Unconfigured{}, false
+}
+
+// Sanitize neutralises terminal control sequences in every field of a
+// result. All result text is attacker-controlled (it comes from web pages
+// and APIs), so it must be cleaned before it is displayed, copied or saved.
+func (r *Result) Sanitize() {
+	r.Title = safe.Line(r.Title)
+	r.URL = safe.Line(r.URL)
+	r.Snippet = safe.Line(r.Snippet)
+	r.Engine = safe.Line(r.Engine)
+	r.Meta = safe.Line(r.Meta)
+	if c := r.Code; c != nil {
+		c.Repo, c.Path, c.Ref, c.Language = safe.Line(c.Repo), safe.Line(c.Path), safe.Line(c.Ref), safe.Line(c.Language)
+		for i := range c.Fragments {
+			c.Fragments[i].Text = safe.Text(c.Fragments[i].Text)
+		}
+	}
 }

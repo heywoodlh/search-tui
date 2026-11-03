@@ -8,6 +8,7 @@ import (
 	"github.com/charmbracelet/lipgloss"
 	"github.com/charmbracelet/x/ansi"
 	"github.com/heywoodlh/tui-search/internal/engine"
+	"github.com/heywoodlh/tui-search/internal/safe"
 )
 
 type layoutKind int
@@ -533,7 +534,7 @@ func (m *Model) render() string {
 		}
 	}
 	if l.errH > 0 {
-		parts = append(parts, m.st.err.Render(ansi.Truncate(" ✗ "+oneLine(m.err.Error()), m.width, "…")))
+		parts = append(parts, m.st.err.Render(ansi.Truncate(" ✗ "+oneLine(safe.Line(m.err.Error())), m.width, "…")))
 	}
 	if l.statusH > 0 {
 		parts = append(parts, m.viewStatus())
@@ -574,7 +575,7 @@ func (m *Model) viewStatus() string {
 	avail := m.width - lipgloss.Width(left)
 	var right string
 	if m.flash != "" {
-		right = bar.Render(ansi.Truncate(" "+m.flash+" ", max(avail, 0), "…"))
+		right = bar.Render(ansi.Truncate(" "+safe.Line(m.flash)+" ", max(avail, 0), "…"))
 	} else {
 		right = m.renderHints(m.statusHints(), avail)
 	}

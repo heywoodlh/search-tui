@@ -13,7 +13,7 @@ timeout = "15s"
 low_power = false                 # fewer results, smaller downloads, no animations
 # region = "us-en"                # engine-specific region code
 # safe_search = "moderate"        # strict | moderate | off
-# browser = "firefox"             # command (optionally with %s or {url}); on macOS/Windows an app name
+# browser = "firefox"             # command (optionally with %s or {url}); on macOS an app name
 #                                 # like "Firefox" works. Unset: $BROWSER, then the system default
 #                                 # (xdg-open / open / Windows default / Termux). "default" forces the
 #                                 # system default. Terminal browsers (w3m, lynx, ...) run inside the TUI.

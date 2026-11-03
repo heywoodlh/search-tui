@@ -9,6 +9,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -274,7 +275,34 @@ func Load(path string) (*Config, error) {
 	}
 	c.path = path
 	c.applyDefaults()
+	if w := c.secretPermissionWarning(); w != "" {
+		fmt.Fprintln(os.Stderr, "tui-search: warning:", w)
+	}
 	return c, nil
+}
+
+// secretPermissionWarning flags literal credentials in a config file that
+// other users can read (for example a home-manager file in the Nix store).
+func (c *Config) secretPermissionWarning() string {
+	if runtime.GOOS == "windows" || c.path == "" {
+		return ""
+	}
+	var names []string
+	for name, e := range c.Engines {
+		if e != nil && (e.APIKey != "" || e.Token != "" || e.Password != "" || e.CX != "") {
+			names = append(names, name)
+		}
+	}
+	if len(names) == 0 {
+		return ""
+	}
+	fi, err := os.Stat(c.path)
+	if err != nil || fi.Mode().Perm()&0o077 == 0 {
+		return ""
+	}
+	sort.Strings(names)
+	return fmt.Sprintf("%s contains credentials for %s but is readable by other users (mode %o); run chmod 600 or use *_file / *_command / *_env instead",
+		c.path, strings.Join(names, ", "), fi.Mode().Perm())
 }
 
 // Parse decodes configuration from a TOML string (used in tests).
@@ -353,18 +381,20 @@ func resolveSecret(ctx context.Context, lit, env, file, cmd string) (string, err
 func RunCommand(ctx context.Context, command string) (string, error) {
 	ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
 	defer cancel()
+	// command is a *_command credential helper from the user's own config
+	// (e.g. "pass show ..."), so running it through the shell is intended.
 	var c *exec.Cmd
 	if runtime.GOOS == "windows" {
-		c = exec.CommandContext(ctx, "cmd", "/C", command)
+		c = exec.CommandContext(ctx, "cmd", "/C", command) //nolint:gosec // G204: user-configured credential command
 	} else {
-		c = exec.CommandContext(ctx, "sh", "-c", command)
+		c = exec.CommandContext(ctx, "sh", "-c", command) //nolint:gosec // G204: user-configured credential command
 	}
 	c.Stdin = nil
 	out, err := c.Output()
 	if err != nil {
 		var ee *exec.ExitError
 		if errors.As(err, &ee) && len(ee.Stderr) > 0 {
-			return "", fmt.Errorf("command %q: %v: %s", command, err, strings.TrimSpace(string(ee.Stderr)))
+			return "", fmt.Errorf("command %q: %w: %s", command, err, strings.TrimSpace(string(ee.Stderr)))
 		}
 		return "", fmt.Errorf("command %q: %w", command, err)
 	}

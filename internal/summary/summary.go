@@ -69,7 +69,7 @@ func SplitSentences(text string) []string {
 		// digit or quote to avoid splitting "v1.2 is" style text.
 		if m[1] < len(text) {
 			r := []rune(text[m[1]:])[0]
-			if !(unicode.IsUpper(r) || unicode.IsDigit(r) || strings.ContainsRune("\"'“‘([", r)) {
+			if !unicode.IsUpper(r) && !unicode.IsDigit(r) && !strings.ContainsRune("\"'“‘([", r) {
 				continue
 			}
 		}
@@ -94,7 +94,7 @@ var abbreviations = map[string]bool{
 func Tokenize(s string) []string {
 	var out []string
 	for _, w := range strings.FieldsFunc(strings.ToLower(s), func(r rune) bool {
-		return !(unicode.IsLetter(r) || unicode.IsDigit(r) || r == '+' || r == '#')
+		return !unicode.IsLetter(r) && !unicode.IsDigit(r) && r != '+' && r != '#'
 	}) {
 		if len(w) < 2 || stopwords[w] {
 			continue
@@ -310,7 +310,7 @@ func KeyTerms(docs []Doc, query string, n int) []string {
 	terms := map[string]*agg{}
 	for _, d := range docs {
 		for _, w := range strings.FieldsFunc(d.Text, func(r rune) bool {
-			return !(unicode.IsLetter(r) || unicode.IsDigit(r) || r == '+' || r == '#' || r == '-')
+			return !unicode.IsLetter(r) && !unicode.IsDigit(r) && r != '+' && r != '#' && r != '-'
 		}) {
 			w = strings.Trim(w, "-")
 			lw := strings.ToLower(w)

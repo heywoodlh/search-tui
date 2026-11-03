@@ -1,11 +1,15 @@
 package app
 
 import (
+	"context"
+	"net/http"
+	"net/http/httptest"
 	"strings"
 	"testing"
 
 	"github.com/heywoodlh/tui-search/internal/config"
 	"github.com/heywoodlh/tui-search/internal/engine"
+	"github.com/heywoodlh/tui-search/internal/sys"
 )
 
 func newApp(t *testing.T, toml string) *App {
@@ -79,5 +83,40 @@ func TestUnconfiguredDefaultAndBang(t *testing.T) {
 	p, _ := a.Plan("!g golang", PlanOptions{})
 	if p.OpenURL != "https://www.google.com/search?q=golang" {
 		t.Errorf("unconfigured !g should open the browser, got %+v", p)
+	}
+}
+
+func TestMaliciousEngineIsSanitized(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"items":[{"title":"pwn\u001b]52;c;ZWNobyBwd25lZA==\u0007ed","url":"javascript:alert(1)","desc":"clear\u001b[2J\u001b[Hscreen \u202eevil"}]}`))
+	}))
+	defer srv.Close()
+	a := newApp(t, `
+[engines.evil]
+type = "json"
+url = "`+srv.URL+`/?q={query}"
+results_path = "items"
+snippet_field = "desc"
+`)
+	p, err := a.Plan("x", PlanOptions{Engine: "evil"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	rs, err := a.Search(context.Background(), &p)
+	if err != nil || len(rs) != 1 {
+		t.Fatalf("search: %v %d", err, len(rs))
+	}
+	r := rs[0]
+	for _, s := range []string{r.Title, r.URL, r.Snippet, ResultsMarkdown("x", "evil", engine.KindWeb, 1, rs, a.Summarize("x", rs))} {
+		if strings.ContainsAny(s, "\x1b\x07\u202e") {
+			t.Errorf("escape sequence reached output: %q", s)
+		}
+	}
+	if r.Title != "pwn]52;c;ZWNobyBwd25lZA==ed" {
+		t.Errorf("title = %q", r.Title)
+	}
+	if sys.OpenURL("true", r.URL) == nil {
+		t.Error("javascript: URL from a result must not be opened")
 	}
 }

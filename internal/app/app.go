@@ -15,6 +15,7 @@ import (
 	"github.com/heywoodlh/tui-search/internal/bang"
 	"github.com/heywoodlh/tui-search/internal/config"
 	"github.com/heywoodlh/tui-search/internal/engine"
+	"github.com/heywoodlh/tui-search/internal/safe"
 	"github.com/heywoodlh/tui-search/internal/summary"
 	"github.com/heywoodlh/tui-search/internal/theme"
 )
@@ -145,7 +146,7 @@ func (a *App) Search(ctx context.Context, p *Plan) ([]engine.Result, error) {
 	}
 	rs, err := p.Engine.Search(ctx, p.Query)
 	if err == nil || p.Query.Kind != engine.KindWeb || ctx.Err() != nil {
-		return rs, err
+		return sanitized(rs), err
 	}
 	var ae *engine.AuthError
 	if errors.As(err, &ae) {
@@ -161,7 +162,15 @@ func (a *App) Search(ctx context.Context, p *Plan) ([]engine.Result, error) {
 	}
 	p.Notice = fmt.Sprintf("%s failed (%v); showing %s results", p.Engine.Name(), err, fb.Name())
 	p.Engine = fb
-	return rs2, nil
+	return sanitized(rs2), nil
+}
+
+// sanitized cleans attacker-controlled text in results (see package safe).
+func sanitized(rs []engine.Result) []engine.Result {
+	for i := range rs {
+		rs[i].Sanitize()
+	}
+	return rs
 }
 
 // Summary is an aggregate summary of a result set.
@@ -193,7 +202,8 @@ func (a *App) SummarizeExternal(ctx context.Context, query string, rs []engine.R
 	if err != nil {
 		d = time.Minute
 	}
-	return summary.External(ctx, a.Cfg.Summary.Command, summary.Prompt(query, ResultDocs(rs)), d)
+	out, err := summary.External(ctx, a.Cfg.Summary.Command, summary.Prompt(query, ResultDocs(rs)), d)
+	return safe.Text(out), err
 }
 
 // ResultDocs converts results to summariser documents.
@@ -239,6 +249,7 @@ func (a *App) FetchPage(ctx context.Context, u, query string) (Page, error) {
 	} else {
 		p.Markdown = string(body)
 	}
+	p.Title, p.Markdown = safe.Line(p.Title), safe.Text(p.Markdown)
 	p.Summary = summary.SummarizeText(p.Markdown, query, max(a.Cfg.Summary.Sentences, 3))
 	a.mu.Lock()
 	if len(a.pages) > 32 { // keep memory bounded on small devices
@@ -265,7 +276,7 @@ func (a *App) FetchCode(ctx context.Context, r engine.Result) (Code, error) {
 	if err != nil {
 		return Code{}, err
 	}
-	c := Code{Name: path.Base(r.Code.Path), Content: content, Line: r.Code.Line}
+	c := Code{Name: path.Base(r.Code.Path), Content: safe.Text(content), Line: r.Code.Line}
 	if c.Line == 0 && len(r.Code.Fragments) > 0 {
 		c.Line = FindLine(content, r.Code.Fragments[0].Text)
 	}

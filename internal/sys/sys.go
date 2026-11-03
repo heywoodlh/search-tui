@@ -12,6 +12,7 @@ import (
 	"strings"
 
 	osc52 "github.com/aymanbagabas/go-osc52/v2"
+	"github.com/heywoodlh/tui-search/internal/safe"
 )
 
 // Copy places text on the clipboard. mode is "auto", "osc52", "command" or
@@ -71,7 +72,7 @@ func pipeTo(args []string, text string) error {
 	if len(args) == 0 {
 		return errors.New("empty command")
 	}
-	c := exec.Command(args[0], args[1:]...)
+	c := exec.Command(args[0], args[1:]...) //nolint:gosec,noctx // G204: fixed clipboard tool or user-configured clipboard_command
 	c.Stdin = strings.NewReader(text)
 	return c.Run()
 }
@@ -148,9 +149,12 @@ func envBrowser() string {
 }
 
 // appBrowser maps a bare application name that is not an executable on
-// PATH to the platform launcher ("open -a" on macOS, "start" on Windows).
+// PATH to macOS's launcher ("open -a Firefox URL"). There is deliberately no
+// Windows equivalent: `cmd /c start` would parse the URL with cmd.exe, where
+// characters such as & and | are command separators, letting a crafted
+// result URL run commands. On Windows, configure the browser's path instead.
 func appBrowser(name, url string) []string {
-	if strings.ContainsAny(name, "%{/\\") || strings.HasPrefix(name, "-") {
+	if runtime.GOOS != "darwin" || strings.ContainsAny(name, "%{/\\") || strings.HasPrefix(name, "-") {
 		return nil
 	}
 	if args := SplitCommand(name); len(args) > 0 {
@@ -158,13 +162,7 @@ func appBrowser(name, url string) []string {
 			return nil
 		}
 	}
-	switch runtime.GOOS {
-	case "darwin":
-		return []string{"open", "-a", name, url}
-	case "windows":
-		return []string{"cmd", "/c", "start", "", name, url}
-	}
-	return nil
+	return []string{"open", "-a", name, url}
 }
 
 // systemBrowser opens url with the platform default handler.
@@ -199,8 +197,13 @@ func IsTerminalBrowser(args []string) bool {
 
 // OpenURL launches a graphical browser in the background.
 func OpenURL(configured, url string) error {
+	if err := safe.WebURL(url); err != nil {
+		return err
+	}
 	args := BrowserCommand(configured, url)
-	c := exec.Command(args[0], args[1:]...)
+	// The program is the configured/system browser; the URL was validated
+	// above and is passed as a single argument (no shell).
+	c := exec.Command(args[0], args[1:]...) //nolint:gosec,noctx // G204: browser runs detached, outliving any context
 	c.Stdout, c.Stderr = nil, nil
 	if err := c.Start(); err != nil {
 		return fmt.Errorf("open browser (%s): %w", args[0], err)
@@ -228,9 +231,20 @@ func Editor(configured string) []string {
 }
 
 // EditorCmd builds the command to open file (optionally at line).
+//
+// Files opened this way hold untrusted content (fetched pages and code), so
+// editors that execute in-file settings are told not to: vim/neovim
+// modelines have a history of code-execution bugs, and Emacs file-local
+// variables can run code.
 func EditorCmd(configured, file string, line int) *exec.Cmd {
 	args := Editor(configured)
 	name := strings.TrimSuffix(filepath.Base(args[0]), ".exe")
+	switch name {
+	case "vim", "nvim", "gvim", "mvim", "view", "rvim":
+		args = append(args, "--cmd", "set nomodeline")
+	case "emacs":
+		args = append(args, "--eval", "(setq enable-local-variables nil enable-dir-local-variables nil)")
+	}
 	if line > 0 {
 		switch name {
 		case "vi", "vim", "nvim", "nano", "emacs", "emacsclient", "micro", "kak", "mg", "joe", "ne", "pico", "gvim", "mvim":
@@ -245,7 +259,9 @@ func EditorCmd(configured, file string, line int) *exec.Cmd {
 	} else {
 		args = append(args, file)
 	}
-	c := exec.Command(args[0], args[1:]...)
+	// The editor and its arguments come from the user's own configuration
+	// or $EDITOR; the file is a path we created.
+	c := exec.Command(args[0], args[1:]...) //nolint:gosec,noctx // G204: user-configured editor; interactive, run via tea.ExecProcess
 	return c
 }
 
@@ -289,15 +305,38 @@ func TempFile(name, content string) (string, func(), error) {
 	if err != nil {
 		return "", nil, err
 	}
-	if name == "" {
-		name = "search.md"
-	}
-	p := filepath.Join(dir, filepath.Base(name))
+	p := filepath.Join(dir, SafeFileName(name))
 	if err := os.WriteFile(p, []byte(content), 0o600); err != nil {
-		os.RemoveAll(dir)
+		_ = os.RemoveAll(dir)
 		return "", nil, err
 	}
-	return p, func() { os.RemoveAll(dir) }, nil
+	return p, func() { _ = os.RemoveAll(dir) }, nil
+}
+
+// SafeFileName reduces an untrusted name (for example a path from a code
+// search result) to a harmless base name: no directories or "..", no
+// leading dot or dash (so it can't be read as an option or hidden), only
+// portable characters, and a bounded length. The extension is kept so
+// editors still pick the right syntax.
+func SafeFileName(name string) string {
+	name = filepath.Base(strings.ReplaceAll(name, "\\", "/"))
+	var b strings.Builder
+	for _, r := range name {
+		switch {
+		case r >= 'a' && r <= 'z', r >= 'A' && r <= 'Z', r >= '0' && r <= '9', r == '.', r == '_', r == '-', r == '+':
+			b.WriteRune(r)
+		default:
+			b.WriteRune('_')
+		}
+	}
+	out := strings.TrimLeft(b.String(), ".-")
+	if len(out) > 80 {
+		out = out[len(out)-80:]
+	}
+	if out == "" || strings.Trim(out, "._") == "" {
+		return "search.md"
+	}
+	return out
 }
 
 // ParseComposed extracts a query from a composed markdown file: comment

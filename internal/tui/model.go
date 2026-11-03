@@ -16,6 +16,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/heywoodlh/tui-search/internal/app"
 	"github.com/heywoodlh/tui-search/internal/engine"
+	"github.com/heywoodlh/tui-search/internal/safe"
 	"github.com/heywoodlh/tui-search/internal/sys"
 )
 
@@ -289,9 +290,13 @@ func (m *Model) rerun() tea.Cmd {
 }
 
 func (m *Model) openURL(u string) tea.Cmd {
+	if err := safe.WebURL(u); err != nil {
+		m.err = err
+		return nil
+	}
 	args := sys.BrowserCommand(m.app.Cfg.Browser, u)
 	if sys.IsTerminalBrowser(args) {
-		c := exec.Command(args[0], args[1:]...)
+		c := exec.Command(args[0], args[1:]...) //nolint:gosec,noctx // G204: user-configured terminal browser; it owns the TTY until it exits
 		return tea.ExecProcess(c, func(err error) tea.Msg { return browserDoneMsg{pid: m.pid, err: err} })
 	}
 	if err := sys.OpenURL(m.app.Cfg.Browser, u); err != nil {
@@ -396,12 +401,9 @@ func (m *Model) typeCycle() tea.Cmd {
 	}
 	next := engine.Kinds[(idx+1)%len(engine.Kinds)]
 	m.opts.Kind = next
+	m.opts.Engine = "" // the default engine for the new type...
 	if m.plan.Engine != nil && m.plan.Engine.Supports(next) {
-		m.opts.Engine = m.plan.Engine.Name()
-	} else if next != engine.KindWeb {
-		m.opts.Engine = ""
-	} else {
-		m.opts.Engine = ""
+		m.opts.Engine = m.plan.Engine.Name() // ...unless the current one supports it
 	}
 	m.stripBang()
 	if strings.TrimSpace(m.input.Value()) == "" {
@@ -573,13 +575,13 @@ func (m *Model) handleKey(msg tea.KeyMsg) tea.Cmd {
 		case k.is(msg, ActHelp), k.is(msg, ActBack), k.is(msg, ActQuit):
 			m.mode = m.prev
 		case k.is(msg, ActDown):
-			m.help.LineDown(1)
+			m.help.ScrollDown(1)
 		case k.is(msg, ActUp):
-			m.help.LineUp(1)
+			m.help.ScrollUp(1)
 		case k.is(msg, ActPageDown):
-			m.help.HalfViewDown()
+			m.help.HalfPageDown()
 		case k.is(msg, ActPageUp):
-			m.help.HalfViewUp()
+			m.help.HalfPageUp()
 		}
 		return nil
 
@@ -663,16 +665,16 @@ func (m *Model) handleKey(msg tea.KeyMsg) tea.Cmd {
 	if m.mode == modeDetail {
 		switch {
 		case k.is(msg, ActDown):
-			m.detail.LineDown(1)
+			m.detail.ScrollDown(1)
 			return nil
 		case k.is(msg, ActUp):
-			m.detail.LineUp(1)
+			m.detail.ScrollUp(1)
 			return nil
 		case k.is(msg, ActPageDown):
-			m.detail.HalfViewDown()
+			m.detail.HalfPageDown()
 			return nil
 		case k.is(msg, ActPageUp):
-			m.detail.HalfViewUp()
+			m.detail.HalfPageUp()
 			return nil
 		case k.is(msg, ActTop):
 			m.detail.GotoTop()
@@ -830,15 +832,15 @@ func (m *Model) handleMouse(msg tea.MouseMsg) tea.Cmd {
 		switch {
 		case m.mode == modeHelp:
 			if d > 0 {
-				m.help.LineDown(3)
+				m.help.ScrollDown(3)
 			} else {
-				m.help.LineUp(3)
+				m.help.ScrollUp(3)
 			}
 		case m.mode == modeDetail || inPreview:
 			if d > 0 {
-				m.detail.LineDown(3)
+				m.detail.ScrollDown(3)
 			} else {
-				m.detail.LineUp(3)
+				m.detail.ScrollUp(3)
 			}
 		default:
 			m.move(d)

@@ -447,9 +447,9 @@ func (s *Sourcegraph) Search(ctx context.Context, q Query) ([]Result, error) {
 	hc.Timeout = 0
 	resp, err := hc.Do(req)
 	if err != nil {
-		return nil, err
+		return nil, redactErr(err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode != http.StatusOK {
 		b, _ := io.ReadAll(io.LimitReader(resp.Body, 512))
 		return nil, &HTTPError{Status: resp.StatusCode, URL: req.URL.String(), Body: strings.TrimSpace(string(b))}
@@ -735,7 +735,7 @@ func Focus(f Fragment, query string, maxLines int) Fragment {
 
 var (
 	mdLinkRE    = regexp.MustCompile(`!?\[([^\]]*)\]\([^)]*\)`)
-	mdMarkerRE  = regexp.MustCompile("(?m)^\\s{0,3}(#{1,6}\\s+|>\\s?|[-*+]\\s+\\[[ xX]\\]\\s+|[-*+]\\s+|\\d+\\.\\s+)")
+	mdMarkerRE  = regexp.MustCompile(`(?m)^\s{0,3}(#{1,6}\s+|>\s?|[-*+]\s+\[[ xX]\]\s+|[-*+]\s+|\d+\.\s+)`)
 	mdEmphRE    = regexp.MustCompile("(\\*\\*|__|~~|`{1,3})")
 	mdCommentRE = regexp.MustCompile(`(?s)<!--.*?-->`)
 )

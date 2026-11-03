@@ -2,6 +2,7 @@ package engine
 
 import (
 	"context"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -62,7 +63,7 @@ func TestRegistryAndCustomJSON(t *testing.T) {
 			t.Errorf("query = %q", r.URL.Query().Get("q"))
 		}
 		w.Header().Set("Content-Type", "application/json")
-		w.Write([]byte(`{"data":{"items":[{"name":"One","link":"https://one.example","desc":"<b>first</b>"},{"name":"Two","link":"https://two.example"}]}}`))
+		_, _ = w.Write([]byte(`{"data":{"items":[{"name":"One","link":"https://one.example","desc":"<b>first</b>"},{"name":"Two","link":"https://two.example"}]}}`))
 	}))
 	defer srv.Close()
 	t.Setenv("MYAPI_TOKEN", "secret")
@@ -175,7 +176,8 @@ func TestGitHubAuthError(t *testing.T) {
 	reg, _ := NewRegistry(cfg)
 	gh, _ := reg.Get("github")
 	_, err := gh.Search(context.Background(), Query{Text: "x", Kind: KindCode})
-	if _, ok := err.(*AuthError); !ok {
+	var ae *AuthError
+	if !errors.As(err, &ae) {
 		t.Errorf("want AuthError, got %v", err)
 	}
 }
