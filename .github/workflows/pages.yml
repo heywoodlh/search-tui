@@ -40,22 +40,26 @@ jobs:
           fi
           echo "base=$base" >> "$GITHUB_OUTPUT"
 
-      # Record the demo with the code from this commit. A failed recording
-      # (e.g. a search engine rate-limiting the runner) must not block the site.
+      # Render the demo video with VHS using the code from this commit. A
+      # failed recording (e.g. a search engine rate-limiting the runner) must
+      # not block the site.
       - name: Record demo
         id: demo
         continue-on-error: true
-        timeout-minutes: 10
+        timeout-minutes: 15
         env:
           GH_TOKEN: ${{ github.token }}
+          VHS_NO_SANDBOX: "true"
         run: |
-          nix shell --inputs-from . .#default nixpkgs#asciinema nixpkgs#tmux \
-            -c demo/record.sh "$RUNNER_TEMP/demo.cast"
+          DEMO_FONT_DIR="$(nix build --inputs-from . --no-link --print-out-paths nixpkgs#jetbrains-mono)/share/fonts"
+          export DEMO_FONT_DIR
+          nix shell --inputs-from . .#default nixpkgs#vhs \
+            -c demo/record.sh "$RUNNER_TEMP/demo"
 
       - name: Build site
         run: |
           args=(_site "${{ steps.url.outputs.base }}")
-          [ -s "$RUNNER_TEMP/demo.cast" ] && args+=("$RUNNER_TEMP/demo.cast")
+          [ -s "$RUNNER_TEMP/demo/demo.mp4" ] && args+=("$RUNNER_TEMP/demo")
           site/build.sh "${args[@]}"
 
       - name: Deploy

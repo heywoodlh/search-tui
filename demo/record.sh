@@ -1,33 +1,41 @@
 #!/usr/bin/env bash
-# Record the website demo: drives the real `search` TUI inside tmux and
-# captures it with asciinema (headless, fixed size).
+# Render the website demo with VHS from demo/demo.tape.
 #
-# Usage: demo/record.sh OUTPUT.cast
-# Needs on PATH: search, tmux, asciinema (3.x). A GitHub token in
-# GITHUB_TOKEN/GH_TOKEN enables the code-search part of the demo.
+# Usage: demo/record.sh OUT_DIR
+# Produces OUT_DIR/demo.webm, demo.mp4 and demo.png (poster).
+# Needs on PATH: search and vhs (which brings ttyd, ffmpeg and Chromium).
+# A GitHub token in GITHUB_TOKEN/GH_TOKEN enables the code-search scene.
 set -euo pipefail
 
-out="${1:?usage: record.sh OUTPUT.cast}"
+out="${1:?usage: record.sh OUT_DIR}"
 here="$(cd "$(dirname "$0")" && pwd)"
 work="$(mktemp -d)"
-trap 'tmux -L demo kill-server 2>/dev/null || true; rm -rf "$work"' EXIT
+trap 'rm -rf "$work"' EXIT
 
-# Isolated, deterministic environment for the recorded session.
-mkdir -p "$work/config/tui-search"
+# Isolated, deterministic environment for the recorded shell.
+mkdir -p "$work/config/tui-search" "$work/out"
 cp "$here/config.toml" "$work/config/tui-search/config.toml"
-export XDG_CONFIG_HOME="$work/config" HOME="$work" TERM=xterm-256color
-export COLORTERM=truecolor LANG=C.UTF-8 LC_ALL=C.UTF-8
+cp "$here/demo.tape" "$work/demo.tape"
+export XDG_CONFIG_HOME="$work/config" COLORTERM=truecolor
+
+# Pin the font when provided (CI passes nixpkgs#jetbrains-mono) so renders
+# don't depend on the fonts installed on the machine.
+if [[ -n "${DEMO_FONT_DIR:-}" ]]; then
+  cat >"$work/fonts.conf" <<XML
+<?xml version="1.0"?>
+<!DOCTYPE fontconfig SYSTEM "fonts.dtd">
+<fontconfig>
+  <dir>$DEMO_FONT_DIR</dir>
+  <include ignore_missing="yes">/etc/fonts/fonts.conf</include>
+  <cachedir>$work/fontconfig</cachedir>
+</fontconfig>
+XML
+  export FONTCONFIG_FILE="$work/fonts.conf"
+fi
 unset DISPLAY WAYLAND_DISPLAY BROWSER
-export DEMO_DIR="$here"
 
-asciinema rec --headless --overwrite --quiet \
-  --window-size 100x28 \
-  --idle-time-limit 2 \
-  --title "search: web & code search in your terminal" \
-  --command "$here/session.sh" \
-  "$out"
+(cd "$work" && vhs demo.tape)
 
-# Drop tmux's "[exited]" line from the end of the recording.
-grep -v '\[exited\]' "$out" >"$work/cast" && cat "$work/cast" >"$out"
-
-echo "recorded $(wc -c <"$out") bytes -> $out"
+mkdir -p "$out"
+cp "$work"/out/demo.{webm,mp4,png} "$out/"
+ls -l "$out"/demo.*

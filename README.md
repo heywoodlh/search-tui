@@ -409,12 +409,12 @@ Layout: `cmd/search` (entry point), `internal/cli` (flags, inline output),
 
 The site lives in `site/`. Pages are plain-text fragments in `site/pages/`, so
 `curl` output stays readable, and `site/build.sh` wraps them in a small
-template. The demo is recorded by `demo/record.sh`, which drives the real TUI
-in tmux under a headless asciinema 3 session:
+template. The demo video is rendered by [VHS](https://github.com/charmbracelet/vhs)
+from `demo/demo.tape`, which drives the real CLI and TUI:
 
 ```sh
-nix shell .#default nixpkgs#asciinema nixpkgs#tmux -c demo/record.sh /tmp/demo.cast
-site/build.sh /tmp/_site http://localhost:8000/ /tmp/demo.cast
+nix shell .#default nixpkgs#vhs -c demo/record.sh /tmp/demo   # demo.webm, demo.mp4, demo.png
+site/build.sh /tmp/_site http://localhost:8000/ /tmp/demo
 ```
 
 The `Pages` workflow does both on every push to `main` and deploys to the

@@ -1,7 +1,9 @@
 #!/usr/bin/env bash
 # Build the static website.
 #
-# Usage: site/build.sh OUT_DIR BASE_URL [DEMO.cast]
+# Usage: site/build.sh OUT_DIR BASE_URL [DEMO_DIR]
+#
+# DEMO_DIR holds demo.webm, demo.mp4 and demo.png from demo/record.sh.
 #
 # Pages in site/pages/*.html are plain-text fragments (only links, a few
 # headings and the demo container are markup). They are wrapped in a tiny
@@ -9,16 +11,12 @@
 # like a man page. A tag-free .txt twin of every page is published too.
 set -euo pipefail
 
-out="${1:?usage: build.sh OUT_DIR BASE_URL [DEMO.cast]}"
-base="${2:?usage: build.sh OUT_DIR BASE_URL [DEMO.cast]}"
-cast="${3:-}"
+out="${1:?usage: build.sh OUT_DIR BASE_URL [DEMO_DIR]}"
+base="${2:?usage: build.sh OUT_DIR BASE_URL [DEMO_DIR]}"
+demo="${3:-}"
 base="${base%/}/"
 here="$(cd "$(dirname "$0")" && pwd)"
 repo="https://github.com/heywoodlh-bot/tui-search"
-
-player_version=3.17.0
-player_js_sha=a13c37632e1b5c49fe9128417b9319a9b5bc64cb457dd5ae52cbba8a3aceb880
-player_css_sha=f619fe17597043564f03b2c6918b3daf890ee8b912fb408542fba11afade4fdb
 
 rm -rf "$out"
 mkdir -p "$out"
@@ -26,17 +24,9 @@ cp "$here/style.css" "$out/"
 cp "$here/../assets/icon.svg" "$out/icon.svg"
 touch "$out/.nojekyll"
 
-# Self-host the asciinema player (pinned and checksummed).
-fetch() {
-  curl -fsSL --retry 3 -o "$out/$1" \
-    "https://cdn.jsdelivr.net/npm/asciinema-player@${player_version}/dist/bundle/$1"
-  echo "$2  $out/$1" | sha256sum -c --quiet -
-}
 have_demo=false
-if [[ -n "$cast" && -s "$cast" ]]; then
-  cp "$cast" "$out/demo.cast"
-  fetch asciinema-player.min.js "$player_js_sha"
-  fetch asciinema-player.css "$player_css_sha"
+if [[ -n "$demo" && -s "$demo/demo.mp4" && -s "$demo/demo.webm" ]]; then
+  cp "$demo"/demo.{webm,mp4,png} "$out/"
   have_demo=true
 fi
 
@@ -64,7 +54,7 @@ render() {
   ')"
   if [[ "$name" == index ]]; then
     if $have_demo; then
-      body="${body//\{\{DEMO\}\}/<div id=\"demo\" class=\"demo\"></div>}"
+      body="${body//\{\{DEMO\}\}/<video class=\"demo\" autoplay loop muted playsinline controls preload=\"metadata\" poster=\"demo.png\" width=\"1200\" height=\"720\" aria-label=\"search demo\"><source src=\"demo.webm\" type=\"video\/webm\"><source src=\"demo.mp4\" type=\"video\/mp4\"><\/video>}"
     else
       body="${body//\{\{DEMO\}\}/(demo recording unavailable for this build)}"
     fi
@@ -81,9 +71,6 @@ render() {
 <link rel="icon" href="${root}icon.svg" type="image/svg+xml">
 <link rel="stylesheet" href="${root}style.css">
 HTML
-    if [[ "$name" == index ]] && $have_demo; then
-      echo '<link rel="stylesheet" href="asciinema-player.css">'
-    fi
     cat <<HTML
 </head>
 <body>
@@ -99,19 +86,6 @@ search is free software under the <a href="$repo/blob/main/LICENSE">GPL-3.0</a>.
 This site is plain text: <a href="${root}$name.txt">$name.txt</a> or curl ${base}$( [[ $name == index ]] || echo "$name/")
 </footer>
 HTML
-    if [[ "$name" == index ]] && $have_demo; then
-      cat <<'HTML'
-<script src="asciinema-player.min.js"></script>
-<script>
-var still = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-AsciinemaPlayer.create("demo.cast", document.getElementById("demo"), {
-  autoPlay: !still, loop: true, preload: true, idleTimeLimit: 2,
-  fit: "width", terminalFontFamily: "ui-monospace, SFMono-Regular, Menlo, Consolas, monospace",
-  poster: "npt:0:20"
-});
-</script>
-HTML
-    fi
     echo '</body>'
     echo '</html>'
   } >"$file"
