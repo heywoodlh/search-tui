@@ -1,0 +1,164 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>search: docs</title>
+<meta name="description" content="Usage, keybindings, engines, configuration and themes for search.">
+<link rel="icon" href="../icon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="../style.css">
+</head>
+<body>
+<nav>
+<a class="logo" href="../" aria-label="search: home"><img src="../icon.svg" alt="search" width="36" height="36"></a>
+<a href="../install/">install</a>
+<a href="../docs/" aria-current="page">docs</a>
+<a href="https://github.com/heywoodlh-bot/tui-search">github</a>
+</nav>
+<main><h1>Docs</h1>
+
+<pre>    1. Usage            5. Configuration
+    2. TUI keys         6. Themes
+    3. Bangs            7. Browser and $EDITOR
+    4. Engines          8. Summaries and low power</pre>
+
+The <a href="https://github.com/heywoodlh-bot/tui-search#readme">README</a> has the full reference.
+
+<h2>1. Usage</h2>
+
+<pre>    search                       open the TUI
+    search [flags] QUERY...      search inline (QUERY may contain !bangs)
+
+    -e, --engine NAME   engine or bang alias: ddg, g, b, k, w, gh, sg ...
+    -c, --code          code search
+    -t, --type TYPE     web, code, repos or issues
+    -l, --lang LANG     code language        -r, --repo OWNER/NAME
+    -n, --limit N       results              -p, --page N
+    -s, --summary       print the summary    --no-summary
+    -j, --json          JSON output          -m, --markdown
+    -o, --open          open the search page in a browser
+    -1, --lucky         open the first result
+    -u, --url           print the search URL
+    -i, --tui           open the TUI with the query
+    -E, --compose       write the query in $EDITOR
+        --edit          open the results in $EDITOR
+        --theme NAME    --browser CMD      --config FILE
+        --list-engines  --list-bangs       --list-themes
+        --example-config</pre>
+
+Queries can be piped in: echo "zig allocators" | search -m
+
+<h2>2. TUI keys</h2>
+
+<pre>    / i ctrl+l        edit the query (search bar)
+    enter l → space   result details      (enter in details: open)
+    j k ↓ ↑           move / scroll       g G home end   first / last
+    ctrl+d ctrl+u     page down / up
+    esc               back: details → results → start page
+    h ←               close details
+    o / O             open result / search page in the browser
+    y / Y / M         copy URL / snippet or code / Markdown link
+    e / E             result (page or code file) / all results in $EDITOR
+    s / S             summarise the page / toggle results summary
+    n N ] [           next / previous page
+    tab shift+tab     engine picker (j k ↑ ↓ tab move, letters jump)
+    t                 cycle type: web → code → repos → issues
+    ctrl+e c          compose the query in $EDITOR
+    r                 re-run           ?  help           q  quit</pre>
+
+Mouse: wheel scrolls, click selects, click again for details. Rebind anything under [keys], e.g.  open = ["o", "enter"]
+
+<h2>3. Bangs</h2>
+
+A !bang anywhere in the query picks the engine, like DuckDuckGo. In bash and zsh, single-quote queries containing ! (history expansion):
+
+<pre>    search '!so rust lifetimes'
+
+    !g !ddg !b !k !br !m !sx    web engines
+    !w !so !hn                  Wikipedia, Stack Overflow, Hacker News
+    !gh !ghc !ghi               GitHub repos, code, issues
+    !gl !glc !gli !sg !cb       GitLab, Sourcegraph, Codeberg
+    !yt !aw !nix !hm !mdn ...   open in your browser
+    !                           I'm feeling lucky</pre>
+
+search --list-bangs prints all of them. Add your own:
+
+<pre>    [bangs]
+    nw = "https://wiki.nixos.org/w/index.php?search={query}"
+    work = "gitlab:code"</pre>
+
+<h2>4. Engines</h2>
+
+<pre>    duckduckgo   default, no key        bing          no key
+    wikipedia    no key                 stackoverflow no key
+    hackernews   no key                 sourcegraph   no key (code)
+    github       token for code search: GITHUB_TOKEN or gh auth token
+    gitlab       token for code/issues  codeberg      optional token
+    google       api_key + cx           kagi          api_key or token
+    brave        api_key                mojeek        api_key
+    searxng      base_url</pre>
+
+Engines that need configuration are hidden until it is set; their bangs open the site in your browser instead. Credentials can be literal or come from the environment, a file or a command:
+
+<pre>    [engines.kagi]
+    token_file = "~/.config/kagi/session-token"
+
+    [engines.github]
+    token_command = "gh auth token"</pre>
+
+Custom engines: type = "url" | "json" | "html", or another instance of a built-in type (gitlab, github, searxng, sourcegraph, gitea):
+
+<pre>    [engines.work]
+    type = "gitlab"
+    base_url = "https://gitlab.example.com"
+    token_command = "pass show work/gitlab"
+    bangs = ["work"]</pre>
+
+<h2>5. Configuration</h2>
+
+~/.config/tui-search/config.toml ($XDG_CONFIG_HOME is honoured; on Windows %AppData%\tui-search). search --example-config prints a fully commented example.
+
+<pre>    default_engine = "duckduckgo"
+    default_code_engine = "github"
+    fallback_engine = "bing"        # when a web search fails
+    results = 20
+    low_power = false
+    browser = ""                    # see 7
+    editor = ""
+
+    [summary]
+    sentences = 3
+
+    [ui]
+    theme = "default"
+    layout = "auto"                 # auto | split | stacked
+    mouse = true</pre>
+
+<h2>6. Themes</h2>
+
+<pre>    [ui]
+    theme = "nord"
+    colors = { accent = "#ebcb8b" }</pre>
+
+default, ansi (uses your terminal's palette), mono, catppuccin-mocha, -macchiato, -frappe, -latte, dracula, nord, gruvbox-dark, gruvbox-light, solarized-dark, solarized-light, tokyo-night, tokyo-night-day, one-dark, one-light, monokai, everforest, rose-pine, rose-pine-dawn, kanagawa, github-dark, github-light. Themes only set foreground colours; the terminal background is never painted.
+
+<h2>7. Browser and $EDITOR</h2>
+
+Links open with --browser, then browser = "...", then $BROWSER, then the system default (xdg-open, open, Windows, termux-open-url). Values are a command with optional %s, or an app name on macOS/Windows ("Firefox"). Terminal browsers such as w3m run inside the TUI.
+
+$EDITOR (or editor = "...") is used for composing queries in a temporary Markdown file, reading results and pages as Markdown, and opening the full source of code results at the matching line.
+
+<h2>8. Summaries and low power</h2>
+
+Summaries are extractive and computed on your device: sentences that agree with the rest of the results and match the query, without repeats. s fetches a page and summarises it. For an abstractive summary, pipe results to a local model:
+
+<pre>    [summary]
+    command = "ollama run llama3.2:1b"</pre>
+
+low_power = true uses fewer results, smaller download caps and no animations, for very small machines.</main>
+<footer>
+search is free software under the <a href="https://github.com/heywoodlh-bot/tui-search/blob/main/LICENSE">GPL-3.0</a>.
+This site is plain text: <a href="../docs.txt">docs.txt</a> or curl https://heywoodlh-bot.github.io/tui-search/pr-preview/pr-1/docs/
+</footer>
+</body>
+</html>

@@ -1,0 +1,62 @@
+Install
+
+Nix
+
+Run it once:
+
+    nix run github:heywoodlh-bot/tui-search -- "hello world"
+
+Install into your profile:
+
+    nix profile install github:heywoodlh-bot/tui-search
+
+Or add the flake as an input. It provides packages for x86_64-linux, aarch64-linux and aarch64-darwin, plus overlays.default.
+
+home-manager
+
+    {
+      inputs.tui-search.url = "github:heywoodlh-bot/tui-search";
+
+      # in your home-manager configuration:
+      imports = [ inputs.tui-search.homeManagerModules.default ];
+
+      programs.tui-search = {
+        enable = true;
+        settings = {
+          default_engine = "duckduckgo";
+          browser = "firefox";
+          ui.theme = "catppuccin-mocha";
+          keys.open = [ "o" "enter" ];
+          engines.github.token_command = "gh auth token";
+          engines.kagi.token_file = "~/.config/kagi/session-token";
+        };
+      };
+    }
+
+settings takes every key of the TOML config and writes ~/.config/tui-search/config.toml. Keep secrets out of it (they would land in the Nix store): use *_file, *_command or *_env instead.
+
+Go
+
+    go install github.com/heywoodlh-bot/tui-search/cmd/search@latest
+
+Needs Go 1.25 or newer. The binary is called search.
+
+Prebuilt binaries
+
+Tagged releases include static binaries for Linux and Windows (amd64, arm64), macOS (arm64) and FreeBSD, with SHA256SUMS. Download one, make it executable and put it on your PATH:
+
+    chmod +x search-linux-amd64 && mv search-linux-amd64 ~/.local/bin/search
+
+Windows
+
+Use search-windows-amd64.exe (or arm64) in Windows Terminal. The config file lives at %AppData%\tui-search\config.toml.
+
+From source
+
+    git clone https://github.com/heywoodlh-bot/tui-search
+    cd tui-search
+    go build -o search ./cmd/search     # or: nix build
+
+Next
+
+Run search with no arguments, press ? for help, or read the docs.
