@@ -292,6 +292,7 @@ abbreviations work (`:sp`, `:vs`, `:tabn`). `:N` jumps to result N.
 | `:exp[ort]`, `:comp[ose]` | all results as Markdown in `$EDITOR` / write the query in `$EDITOR` |
 | `:h[elp] [topic]`, `:the[me] [name]`, `:se[t] {option}` | help, live theme switching, options (`layout=split`, `results=N`, `snippetlines=N`, `theme=NAME`, ...) |
 | `:engines`, `:ban[gs]`, `:his[tory]`, `:ve[rsion]`, `:redr[aw]` | lists and utilities |
+| `:log[in] {provider}` | save credentials for a provider (`kagi`, `github`, `brave`, `google`, `mojeek`, `gitlab`) |
 
 Mouse: the wheel scrolls, a click selects a result, a second click opens its
 details, and clicking the query line edits it.
@@ -313,7 +314,7 @@ details = ["l", "right"]
 | duckduckgo (default) | `!ddg` `!d` | web | none (HTML endpoint) |
 | google | `!g` | web | `api_key` + `cx` ([Programmable Search](https://programmablesearchengine.google.com/)) |
 | bing | `!b` | web | none (HTML, best effort) |
-| kagi | `!k` | web | `api_key` (Search API) **or** `token` (Session Link token) |
+| kagi | `!k` | web | `api_key` (v1 Search API, billed) **or** `token` (Session Link, uses your plan) |
 | brave | `!br` | web | `api_key` |
 | mojeek | `!m` | web | `api_key` (scraping is captcha'd) |
 | searxng | `!sx` | web | `base_url`; optional `username`/`password` or `token` |
@@ -349,6 +350,60 @@ are missing. Press `O` (or use `--open`) to run the same search in your
 browser instead. When the default web engine fails for another reason (rate
 limiting, captcha), `fallback_engine` (Bing by default, `"none"` disables it)
 is tried and the status bar says so.
+
+### Logging in with `:login`
+
+You don't have to write credentials into `config.toml` by hand. In the TUI,
+`:login {provider}` asks for what that provider needs and stores it in one JSON
+file, `$XDG_CONFIG_HOME/search-tui/auth.json` (mode `0600`; override the path
+with `$SEARCH_TUI_AUTH`). Engines that were hidden because they had no
+credentials appear as soon as the login finishes — no restart. The argument is
+required, and `tab` completes provider names.
+
+| `:login` | what it asks for | where to get it |
+| --- | --- | --- |
+| `kagi` | Search API key **or** Session Link (auto-detected) | <https://kagi.com/settings/api> / Settings → Account |
+| `github` | device-flow authorization | <https://github.com/login/device> (opened for you) |
+| `brave` | API key | <https://api.search.brave.com/app/keys> |
+| `mojeek` | API key | <https://www.mojeek.com/services/search/web-search-api/> |
+| `google` | API key, then the Programmable Search engine ID (`cx`) | <https://programmablesearchengine.google.com/controlpanel/all> |
+| `gitlab` | personal access token (`read_api`) | <https://gitlab.com/-/user_settings/personal_access_tokens> |
+
+`:help login` shows the same list, with the notes below, inside the TUI.
+
+- **Kagi** — accepts either credential and detects which one you pasted:
+  - a **Session Link** (`Settings → Account`) uses your existing Kagi plan,
+    costs nothing extra, and is the way to search with a subscription instead
+    of paying for the API. It is unofficial — Kagi documents Session Links for
+    private browser sessions, not for machine access — and it reads the no-JS
+    HTML interface, so a markup change or a bot challenge can break it. Kagi
+    puts a Turnstile challenge in front of that interface on some networks; the
+    login says so when its check is challenged, and the first search reports
+    the same thing.
+  - an **API key** (`kagi.com/settings/api`) uses the official v1 Search API
+    and is billed separately at ~$12 per 1,000 requests.
+  `:login kagi` probes the API first, so a key is recognised immediately; a
+  Session Link is then verified against the HTML interface.
+- **GitHub** — OAuth device flow: a code is shown and the verification page
+  opens in your browser; there is no redirect and no client secret is stored.
+  It signs in through the GitHub CLI's public OAuth app and requests the
+  `repo`, `read:org` and `gist` scopes, so the token appears as "GitHub CLI"
+  under Settings → Applications and can be revoked there. Set
+  `SEARCH_TUI_GITHUB_CLIENT_ID` to use your own OAuth app instead (device flow
+  must be enabled on it). Private code search needs `repo`; public code search
+  works without a token at all.
+- **Google** — two values, because scraping is blocked: the API key and the
+  `cx` of a Programmable Search engine configured to search the whole web.
+- **GitLab** — the token needs `read_api`. For self-hosted instances set
+  `[engines.gitlab] base_url` in `config.toml` first; `:login gitlab` does not
+  guess the host.
+- **Brave / Mojeek** — plain API keys. Brave's free tier needs a card on file;
+  Mojeek's API is paid and its HTML endpoint cannot be scraped.
+
+Values in `auth.json` are the last resort when a credential is resolved: a
+literal value, `*_env`, `*_file` or `*_command` in `config.toml` always wins,
+so an existing explicit setup keeps working. Remove a provider's entry (or the
+file) to forget it.
 
 ### Custom engines
 
@@ -397,6 +452,10 @@ The config file is `$XDG_CONFIG_HOME/search-tui/config.toml` (by default
 `~/.config/search-tui/config.toml`). Override it with `--config` or
 `$SEARCH_TUI_CONFIG`. Every key is optional. `search --example-config` prints
 a fully commented example ([source](internal/config/example.toml)).
+
+Credentials saved by `:login` live in `auth.json` beside the config file
+(`$SEARCH_TUI_AUTH` overrides that path). Keep it out of version control: it is
+written with mode 0600 and holds plain-text tokens.
 
 ```toml
 default_engine = "duckduckgo"

@@ -63,6 +63,8 @@ type Root struct {
 	tabs []*tab
 	cur  int
 	cmd  cmdline
+	// login holds the :login session being collected, if any.
+	login *loginSession
 	// pendingCmd carries the tea.Cmd produced while executing a command.
 	pendingCmd tea.Cmd
 }
@@ -711,6 +713,12 @@ func (r *Root) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			e.cleanup() // the pane was closed while the editor was open
 		}
 		return r, nil
+
+	case loginDeviceMsg:
+		return r, r.showDevicePrompt(msg)
+
+	case loginDoneMsg:
+		return r, r.loginDone(msg)
 	}
 
 	// Spinner ticks, cursor blinks and the like carry their own ids; every

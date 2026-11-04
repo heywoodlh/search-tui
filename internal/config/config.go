@@ -5,6 +5,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io/fs"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -132,6 +133,9 @@ type Engine struct {
 	SnippetSelector string `toml:"snippet_selector"`
 
 	secrets sync.Map
+	// key is the name this engine is registered under in Config.Engines; it
+	// links the engine to credentials saved by :login.
+	key string
 }
 
 // Default returns a configuration with all defaults applied.
@@ -316,9 +320,10 @@ func Parse(s string) (*Config, error) {
 // EngineConfig returns the configuration for the named engine, never nil.
 func (c *Config) EngineConfig(name string) *Engine {
 	if e, ok := c.Engines[name]; ok && e != nil {
+		e.key = name
 		return e
 	}
-	e := &Engine{}
+	e := &Engine{key: name}
 	c.Engines[name] = e
 	return e
 }
@@ -349,8 +354,31 @@ func (e *Engine) Secret(ctx context.Context, name string) (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("%s: %w", name, err)
 	}
+	if v == "" {
+		// Credentials saved by :login are the last resort, so an explicit
+		// config value always wins over the central auth file.
+		v = Credential(e.key, name)
+	}
 	e.secrets.Store(name, v)
 	return v, nil
+}
+
+// ClearSecrets drops the cached credentials so the next search re-resolves
+// them (used after :login updates the auth file).
+func (e *Engine) ClearSecrets() {
+	if e == nil {
+		return
+	}
+	e.secrets = sync.Map{}
+}
+
+// AuthMethod reports how this engine's credential was obtained (a Session Link
+// token, an API key, ...), so providers can skip probing the wrong endpoint.
+func (e *Engine) AuthMethod() string {
+	if e == nil {
+		return ""
+	}
+	return CredentialMethod(e.key)
 }
 
 func resolveSecret(ctx context.Context, lit, env, file, cmd string) (string, error) {
@@ -364,10 +392,18 @@ func resolveSecret(ctx context.Context, lit, env, file, cmd string) (string, err
 	}
 	if file != "" {
 		b, err := os.ReadFile(ExpandHome(file))
-		if err != nil {
+		switch {
+		case err == nil && strings.TrimSpace(string(b)) != "":
+			return strings.TrimSpace(string(b)), nil
+		case err == nil:
+			// Empty file: keep looking at the other sources.
+		case errors.Is(err, fs.ErrNotExist):
+			// A configured path that is not there yet must not shadow another
+			// source: :login may have stored this credential in auth.json,
+			// and a stale config entry should not fail the search.
+		default:
 			return "", err
 		}
-		return strings.TrimSpace(string(b)), nil
 	}
 	if cmd != "" {
 		return RunCommand(ctx, cmd)
@@ -426,5 +462,5 @@ func (e *Engine) HasSecret(name string) bool {
 	case "cx":
 		lit, env, file, cmd = e.CX, e.CXEnv, e.CXFile, e.CXCommand
 	}
-	return lit != "" || (env != "" && os.Getenv(env) != "") || file != "" || cmd != ""
+	return lit != "" || (env != "" && os.Getenv(env) != "") || file != "" || cmd != "" || Credential(e.key, name) != ""
 }

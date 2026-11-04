@@ -1,8 +1,10 @@
 package engine
 
 import (
+	"bytes"
 	"context"
 	"encoding/base64"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"net/http"
@@ -339,9 +341,22 @@ func (g *Google) Search(ctx context.Context, q Query) ([]Result, error) {
 
 // ---------------------------------------------------------------------- Kagi
 
+// kagiSearchAPI is the current (v1) Search API endpoint. It replaced the
+// deprecated v0 GET endpoint, which now rejects valid keys with HTTP 401.
+const kagiSearchAPI = "https://kagi.com/api/v1/search"
+
+// kagiHint is the remediation shown whenever Kagi rejects a credential.
+const kagiHint = "set [engines.kagi] api_key to a Kagi Search API key (kagi.com/settings/api); " +
+	"a Session Link token only works with the HTML fallback"
+
 // Kagi uses the Search API with an API key, or the no-JS HTML interface with
 // a session token (from the "Session Link" in Kagi's account settings).
-type Kagi struct{ base }
+type Kagi struct {
+	base
+	// apiURL and htmlURL override endpoints in tests.
+	apiURL  string
+	htmlURL string
+}
 
 func (k *Kagi) SearchURL(q Query) string {
 	return "https://kagi.com/search?q=" + url.QueryEscape(q.Text)
@@ -352,24 +367,63 @@ func (k *Kagi) Search(ctx context.Context, q Query) ([]Result, error) {
 	if err != nil {
 		return nil, err
 	}
-	if key != "" {
-		return k.api(ctx, q, key)
-	}
 	tok, err := k.cfg.Secret(ctx, "token")
 	if err != nil {
 		return nil, err
 	}
-	if tok == "" {
-		return nil, &AuthError{Engine: "kagi", Hint: "set [engines.kagi] api_key (Search API) or token (session link token)"}
+	if key != "" {
+		rs, err := k.api(ctx, q, key)
+		if err == nil {
+			return rs, nil
+		}
+		// A Session Link is a URL and people paste it into api_key, which is
+		// the documented Kagi credential. The Search API cannot use it, but
+		// the HTML interface can, so keep searching on the subscription
+		// instead of failing with a hint the user cannot act on.
+		if !isAuthErr(err) || !isSessionLink(key) {
+			return nil, err
+		}
+		return k.html(ctx, q, kagiToken(key))
 	}
-	tok = kagiToken(tok)
-	v := url.Values{"q": {q.Text}, "token": {tok}}
+	if tok == "" {
+		return nil, &AuthError{Engine: "kagi", Hint: "api_key (Search API) or token (Session Link token)"}
+	}
+	// A "token" is usually the Session Link token, which only the HTML
+	// interface understands. Kagi API keys are opaque strings too, so try the
+	// credential against the Search API first — unless :login recorded that it
+	// saved this exact value as a Session Link, in which case probing the paid
+	// API is pointless.
+	session := k.cfg.AuthMethod() == "session" && config.Credential("kagi", "token") == tok
+	if !session {
+		if rs, err := k.api(ctx, q, tok); err == nil {
+			return rs, nil
+		} else if !isAuthErr(err) {
+			return nil, err
+		}
+	}
+	return k.html(ctx, q, kagiToken(tok))
+}
+
+// html scrapes the no-JS interface with a Session Link token. Kagi fronts it
+// with a bot challenge, so a rejected token or a challenge page is reported as
+// an authentication problem rather than "no results".
+func (k *Kagi) html(ctx context.Context, q Query, tok string) ([]Result, error) {
+	v := url.Values{"q": {q.Text}}
 	if p := pageOf(q); p > 1 {
 		v.Set("batch", fmt.Sprint(p))
 	}
+	endpoint := k.htmlURL
+	if endpoint == "" {
+		endpoint = "https://kagi.com/html/search"
+	}
 	doc, err := k.client.Doc(ctx, Request{
-		URL:     "https://kagi.com/html/search?" + v.Encode(),
-		Headers: k.headers(map[string]string{"Cookie": "kagi_session=" + tok}),
+		URL: endpoint + "?" + v.Encode(),
+		Headers: k.headers(map[string]string{
+			"Cookie": "kagi_session=" + tok,
+			// The official browser extension authenticates with this header
+			// instead of a cookie; sending both covers both front ends.
+			"X-Kagi-Authorization": tok,
+		}),
 	})
 	if err != nil {
 		return nil, err
@@ -386,12 +440,26 @@ func (k *Kagi) Search(ctx context.Context, q Query) ([]Result, error) {
 		rs = append(rs, Result{Title: title, URL: href, Snippet: snip, Engine: k.name})
 	})
 	if len(rs) == 0 {
+		page := strings.ToLower(doc.Find("title").Text() + doc.Text())
+		if strings.Contains(page, "turnstile") || strings.Contains(page, "captcha") || strings.Contains(page, "challenge") {
+			return nil, &AuthError{Engine: "kagi", Hint: "Kagi put a bot challenge in front of the HTML interface, so a Session Link cannot be used from this network; set api_key to a Search API key (kagi.com/settings/api, billed per query) or search in a browser"}
+		}
+		if strings.Contains(page, "sign in") || strings.Contains(page, "login") || strings.Contains(page, "welcome") {
+			return nil, &AuthError{Engine: "kagi", Hint: "the Session Link token was rejected; copy a fresh one from kagi.com/settings → Account (signing in again invalidates the old link)"}
+		}
 		return nil, errors.New("kagi returned no parseable results (is the session token valid?)")
 	}
 	return trimResults(rs, limitOf(q, 20)), nil
 }
 
-// kagiToken accepts either a bare token or a full session link.
+// isSessionLink reports whether a credential is a Session Link URL (rather
+// than an opaque API key or bare token).
+func isSessionLink(v string) bool {
+	u, err := url.Parse(strings.TrimSpace(v))
+	return err == nil && (u.Scheme == "http" || u.Scheme == "https") && u.Query().Get("token") != ""
+}
+
+// kagiToken extracts the token from a Session Link, or returns the value as is.
 func kagiToken(t string) string {
 	if u, err := url.Parse(t); err == nil && u.Query().Get("token") != "" {
 		return u.Query().Get("token")
@@ -399,35 +467,96 @@ func kagiToken(t string) string {
 	return t
 }
 
-func (k *Kagi) api(ctx context.Context, q Query, key string) ([]Result, error) {
-	v := url.Values{"q": {q.Text}, "limit": {fmt.Sprint(limitOf(q, 20))}}
-	var resp struct {
-		Data []struct {
-			T       int    `json:"t"`
-			URL     string `json:"url"`
-			Title   string `json:"title"`
-			Snippet string `json:"snippet"`
-		} `json:"data"`
-		Error []struct {
-			Msg string `json:"msg"`
-		} `json:"error"`
+// isAuthErr reports whether err means Kagi refused the credential. Kagi
+// answers a bad key with 401/403 or with 400 plus an invalid_token error.
+func isAuthErr(err error) bool {
+	var ae *AuthError
+	if errors.As(err, &ae) {
+		return true
 	}
-	err := k.client.JSON(ctx, Request{
-		URL:     "https://kagi.com/api/v0/search?" + v.Encode(),
-		Headers: k.headers(map[string]string{"Authorization": "Bot " + key}),
-	}, &resp)
+	var he *HTTPError
+	if errors.As(err, &he) {
+		if he.Status == http.StatusUnauthorized || he.Status == http.StatusForbidden {
+			return true
+		}
+		if he.Status == http.StatusBadRequest &&
+			(strings.Contains(he.Body, "invalid_token") || strings.Contains(he.Body, "unauthorized")) {
+			return true
+		}
+	}
+	return false
+}
+
+// api calls the v1 Search API, which takes a Bearer key and a JSON body.
+func (k *Kagi) api(ctx context.Context, q Query, key string) ([]Result, error) {
+	payload, err := json.Marshal(struct {
+		Query string `json:"query"`
+		Limit int    `json:"limit"`
+		Page  int    `json:"page,omitempty"`
+	}{Query: q.Text, Limit: limitOf(q, 20), Page: pageOf(q)})
 	if err != nil {
 		return nil, err
 	}
-	if len(resp.Error) > 0 {
-		return nil, errors.New("kagi: " + resp.Error[0].Msg)
+	var resp struct {
+		Data *struct {
+			Search []struct {
+				URL     string `json:"url"`
+				Title   string `json:"title"`
+				Snippet string `json:"snippet"`
+			} `json:"search"`
+		} `json:"data"`
+		Errors []struct {
+			Code    string `json:"code"`
+			Message string `json:"message"`
+		} `json:"errors"`
+	}
+	endpoint := k.apiURL
+	if endpoint == "" {
+		endpoint = kagiSearchAPI
+	}
+	body, _, err := k.client.Do(ctx, Request{
+		Method: http.MethodPost,
+		URL:    endpoint,
+		Body:   bytes.NewReader(payload),
+		Headers: k.headers(map[string]string{
+			"Authorization": "Bearer " + key,
+			"Content-Type":  "application/json",
+			"Accept":        "application/json",
+		}),
+	})
+	// Kagi explains rejections in the JSON body of 4xx responses, so decode it
+	// before falling back to the transport error (whose body snippet is opt-in
+	// and often truncated).
+	if len(body) > 0 {
+		if uerr := json.Unmarshal(body, &resp); uerr != nil && err == nil {
+			return nil, fmt.Errorf("decode response from %s: %w", hostOf(endpoint), uerr)
+		}
+	}
+	if len(resp.Errors) > 0 {
+		e := resp.Errors[0]
+		if strings.Contains(e.Code, "invalid_token") || strings.Contains(e.Code, "unauthorized") {
+			return nil, &AuthError{Engine: "kagi", Hint: kagiHint}
+		}
+		msg := e.Message
+		if msg == "" {
+			msg = e.Code
+		}
+		return nil, errors.New("kagi: " + msg)
+	}
+	if err != nil {
+		if isAuthErr(err) {
+			return nil, &AuthError{Engine: "kagi", Hint: kagiHint}
+		}
+		return nil, err
 	}
 	var rs []Result
-	for _, d := range resp.Data {
-		if d.T != 0 {
-			continue
+	if resp.Data != nil {
+		for _, d := range resp.Data.Search {
+			if d.URL == "" || d.Title == "" {
+				continue
+			}
+			rs = append(rs, Result{Title: CleanText(d.Title), URL: d.URL, Snippet: CleanText(d.Snippet), Engine: k.name})
 		}
-		rs = append(rs, Result{Title: d.Title, URL: d.URL, Snippet: CleanText(d.Snippet), Engine: k.name})
 	}
 	return rs, nil
 }

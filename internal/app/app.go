@@ -56,6 +56,22 @@ func New(cfg *config.Config) (*App, error) {
 	return &App{Cfg: cfg, Reg: reg, Bangs: bang.NewResolver(reg, cfg.Bangs), Warnings: warnings, Theme: th, pages: map[string]Page{}}, nil
 }
 
+// Reload rebuilds the engine registry and bang resolver after credentials
+// changed (the TUI's :login command), so newly configured engines appear
+// without restarting.
+func (a *App) Reload() error {
+	for _, e := range a.Cfg.Engines {
+		e.ClearSecrets()
+	}
+	reg, err := engine.NewRegistry(a.Cfg)
+	if err != nil {
+		return err
+	}
+	a.Reg = reg
+	a.Bangs = bang.NewResolver(reg, a.Cfg.Bangs)
+	return nil
+}
+
 // Plan is a resolved search request.
 type Plan struct {
 	Query  engine.Query

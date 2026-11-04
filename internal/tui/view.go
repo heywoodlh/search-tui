@@ -7,7 +7,9 @@ import (
 
 	"github.com/charmbracelet/lipgloss"
 	"github.com/charmbracelet/x/ansi"
+	"github.com/heywoodlh/search-tui/internal/config"
 	"github.com/heywoodlh/search-tui/internal/engine"
+	"github.com/heywoodlh/search-tui/internal/login"
 	"github.com/heywoodlh/search-tui/internal/safe"
 )
 
@@ -441,6 +443,20 @@ func (m *Model) refreshHelp() {
 			desc += m.st.muted.Render(" (" + strings.Join(c.aliases, ", ") + ")")
 		}
 		b = append(b, ansi.Truncate(k+pad+desc, w, "…"))
+	}
+	section("login", "Logging in (:login {provider})",
+		m.st.muted.Render("credentials are saved in "+config.AuthPath()+" (0600) and used when the engine has none configured"))
+	for _, p := range login.Providers() {
+		name := m.st.key.Render(p.Engine)
+		pad := strings.Repeat(" ", max(12-lipgloss.Width(name), 1))
+		how := "API key"
+		if p.Method == login.MethodDevice {
+			how = "device flow"
+		}
+		b = append(b, ansi.Truncate(name+pad+m.st.muted.Render(how+" · "+p.Docs), w, "…"))
+		for _, n := range p.Notes {
+			b = append(b, strings.Split(ansi.Wordwrap("  "+n, w, ""), "\n")...)
+		}
 	}
 	section("mouse", "Mouse",
 		"wheel scrolls · click selects · click again for details · click a pane to focus it · click the query to edit")
