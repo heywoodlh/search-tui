@@ -3,7 +3,7 @@ search: web and code search in your terminal.
 A fast TUI and CLI for DuckDuckGo, Google, Bing, Kagi, Brave, GitHub, Sourcegraph and more, with DuckDuckGo-style !bangs, copyable code snippets and summaries computed on your own device. One small static binary for Linux, macOS and Windows, from a Raspberry Pi to a 4K monitor.
 
 
-(demo video unavailable for this build)
+demo video
 
 Try it
 
