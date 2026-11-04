@@ -321,9 +321,6 @@ func (r *Root) clone(src *Model) *Model {
 	p.plan = src.plan
 	p.results = src.results
 	p.sel = src.sel
-	p.summary = src.summary
-	p.extSummary = src.extSummary
-	p.showSummary = src.showSummary
 	p.history = append([]string{}, src.history...)
 	p.histIdx = len(p.history)
 	for k, v := range src.pages {

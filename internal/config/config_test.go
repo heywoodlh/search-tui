@@ -15,8 +15,8 @@ func TestDefaults(t *testing.T) {
 		t.Errorf("bad defaults: %+v", c)
 	}
 	lp, _ := Parse("low_power = true")
-	if lp.Results != 10 || *lp.UI.ShowSummary {
-		t.Errorf("low_power defaults not applied: results=%d", lp.Results)
+	if lp.Results != 10 || lp.MaxBodyKB != 512 {
+		t.Errorf("low_power defaults not applied: results=%d maxbody=%d", lp.Results, lp.MaxBodyKB)
 	}
 }
 

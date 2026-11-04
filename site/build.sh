@@ -56,7 +56,7 @@ render() {
     END { if (inpre) printf "</pre>\n" }
   ')"
   if [[ "$name" == index ]]; then
-    body="${body//\{\{SCREENSHOT\}\}/<img class=\"demo\" src=\"demo.png\" alt=\"search TUI showing Stack Overflow results and an on-device summary for rust borrow checker\" width=\"1200\" height=\"720\">}"
+    body="${body//\{\{SCREENSHOT\}\}/<img class=\"demo\" src=\"demo.png\" alt=\"search TUI showing Stack Overflow results with a preview of the selected result for rust borrow checker\" width=\"1200\" height=\"720\">}"
     if $have_demo; then
       body="${body//\{\{DEMO_LINK\}\}/<a href=\"demo.mp4\">demo video<\/a>}"
     else

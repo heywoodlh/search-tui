@@ -12,7 +12,7 @@ import (
 )
 
 type layoutInfo struct {
-	inputH, sumH, listTop   int
+	inputH, peekH, listTop  int
 	listH, listW            int
 	statusH, errH           int
 	compact, showDetailFull bool
@@ -33,13 +33,12 @@ func (m *Model) layout() layoutInfo {
 	// allocates a permanent second column for an empty preview.
 	l.listW = m.width
 	l.showDetailFull = m.mode == modeDetail || m.mode == modeVisual
-	if m.showSummary && !m.summaryEmpty() && !l.showDetailFull && m.height >= 16 && m.mode != modeHelp {
-		l.sumH = len(m.summaryLines(m.width))
-	}
+	// The top strip holds only the pinned peek at the selected result. There
+	// is no aggregate summary of the whole result set.
 	if len(m.results) > 0 && !l.showDetailFull && m.mode != modeHelp && m.height >= 9 {
-		l.sumH = max(l.sumH, 3) + 1 // pinned peek plus a separate divider
+		l.peekH = 4 // three peek lines plus a separate divider
 	}
-	l.listTop = l.inputH + l.sumH
+	l.listTop = l.inputH + l.peekH
 	l.listH = max(m.height-l.listTop-l.statusH-l.errH, 0)
 	l.compact = l.listH < 10 || l.listW < 40
 	return l
@@ -269,42 +268,7 @@ func (m *Model) viewEmpty(l layoutInfo) string {
 	return lipgloss.NewStyle().Width(w).MaxWidth(w).Render(strings.Join(lines, "\n"))
 }
 
-// ---------------------------------------------------------------- summary
-
-func (m *Model) summaryEmpty() bool { return m.summary.Empty() && m.extSummary == "" }
-
-func (m *Model) summaryLines(width int) []string {
-	w := max(width-4, 10)
-	maxLines := max(min(m.height/4, 9), 3)
-	var lines []string
-	head := m.st.sumTitle.Render("Summary")
-	if len(m.summary.Terms) > 0 && width > 50 {
-		head += m.st.muted.Render(" · related: " + strings.Join(m.summary.Terms, ", "))
-	}
-	lines = append(lines, " "+ansi.Truncate(head, width-2, "…"))
-	body := []string{}
-	if m.extSummary != "" {
-		body = append(body, strings.Split(ansi.Wordwrap(m.extSummary, w, ""), "\n")...)
-	} else {
-		for _, s := range m.summary.Sentences {
-			txt := fmt.Sprintf("%s %s %s", m.st.bullet, s.Text, m.st.muted.Render(fmt.Sprintf("[%d]", s.Source)))
-			wrapped := strings.Split(ansi.Wordwrap(txt, w, ""), "\n")
-			for i := 1; i < len(wrapped); i++ {
-				wrapped[i] = "  " + wrapped[i]
-			}
-			body = append(body, wrapped...)
-		}
-	}
-	if len(body) > maxLines-1 {
-		body = body[:maxLines-1]
-		body[len(body)-1] = ansi.Truncate(body[len(body)-1], w-1, "") + "…"
-	}
-	for _, b := range body {
-		lines = append(lines, "  "+b)
-	}
-	lines = append(lines, m.st.border.Render(strings.Repeat("─", max(width, 1))))
-	return lines
-}
+// ---------------------------------------------------------------- peek
 
 func (m *Model) compactPeek() []string {
 	r, ok := m.current()
@@ -554,26 +518,12 @@ func (m *Model) render() string {
 	l := m.layout()
 	var parts []string
 	parts = append(parts, m.viewHeader(l))
-	if l.sumH > 0 {
-		var lines []string
-		if m.showSummary && !m.summaryEmpty() {
-			lines = m.summaryLines(m.width)
+	if l.peekH > 0 {
+		lines := m.compactPeek()
+		for len(lines) < l.peekH-1 {
+			lines = append(lines, "")
 		}
-		peek := m.compactPeek()
-		bodyH := l.sumH
-		if len(peek) > 0 {
-			bodyH--
-		}
-		if len(lines) > bodyH {
-			lines = lines[:bodyH]
-		}
-		if len(lines) < bodyH {
-			lines = append(lines, make([]string, bodyH-len(lines))...)
-		}
-		if len(peek) > 0 {
-			copy(lines[len(lines)-len(peek):], peek)
-			lines = append(lines, m.st.border.Render(strings.Repeat("─", max(m.width, 1))))
-		}
+		lines = append(lines, m.st.border.Render(strings.Repeat("─", max(m.width, 1))))
 		parts = append(parts, strings.Join(lines, "\n"))
 	}
 	if l.listH > 0 {

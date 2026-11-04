@@ -76,10 +76,6 @@ type Model struct {
 	sel          int
 	offset       int
 
-	summary     app.Summary
-	showSummary bool
-	extSummary  string
-
 	loading     bool
 	searchID    int
 	cancel      context.CancelFunc
@@ -126,19 +122,18 @@ func New(a *app.App, query string, opts app.PlanOptions) *Model {
 		sp.Spinner = spinner.Spinner{Frames: []string{"…"}, FPS: time.Hour}
 	}
 	m := &Model{
-		app:         a,
-		keys:        km,
-		st:          newStyles(a.Cfg.UI, a.Theme),
-		input:       ti,
-		spinner:     sp,
-		opts:        opts,
-		initOpts:    opts,
-		showSummary: *a.Cfg.UI.ShowSummary && a.Cfg.SummaryEnabled(),
-		pages:       map[string]app.Page{},
-		pageErrs:    map[string]error{},
-		width:       80,
-		height:      24,
-		focused:     true,
+		app:      a,
+		keys:     km,
+		st:       newStyles(a.Cfg.UI, a.Theme),
+		input:    ti,
+		spinner:  sp,
+		opts:     opts,
+		initOpts: opts,
+		pages:    map[string]app.Page{},
+		pageErrs: map[string]error{},
+		width:    80,
+		height:   24,
+		focused:  true,
 	}
 	m.detail = viewport.New(0, 0)
 	m.help = viewport.New(0, 0)
@@ -161,13 +156,6 @@ type resultsMsg struct {
 	plan    app.Plan
 	results []engine.Result
 	err     error
-}
-
-type extSummaryMsg struct {
-	pid  int
-	id   int
-	text string
-	err  error
 }
 
 type pageMsg struct {
@@ -203,7 +191,6 @@ type browserDoneMsg struct {
 
 // paneID routes messages to panes.
 func (m resultsMsg) paneID() int     { return m.pid }
-func (m extSummaryMsg) paneID() int  { return m.pid }
 func (m pageMsg) paneID() int        { return m.pid }
 func (m codeMsg) paneID() int        { return m.pid }
 func (m flashMsg) paneID() int       { return m.pid }
@@ -397,11 +384,6 @@ func (m *Model) setResults(rs []engine.Result) {
 	m.results = rs
 	m.sel, m.offset = 0, 0
 	m.items = nil
-	m.summary = app.Summary{}
-	m.extSummary = ""
-	if m.app.Cfg.SummaryEnabled() {
-		m.summary = m.app.Summarize(m.plan.Query.Text, rs)
-	}
 }
 
 func (m *Model) typeCycle() tea.Cmd {
@@ -503,23 +485,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if msg.plan.Lucky && len(msg.results) > 0 {
 			cmds = append(cmds, m.openURL(msg.results[0].URL))
 		}
-		if m.app.Cfg.Summary.Command != "" && m.showSummary && len(msg.results) > 0 {
-			a, q, rs, id := m.app, msg.plan.Query.Text, msg.results, msg.id
-			cmds = append(cmds, func() tea.Msg {
-				t, err := a.SummarizeExternal(context.Background(), q, rs)
-				return extSummaryMsg{pid: m.pid, id: id, text: t, err: err}
-			})
-		}
 		return m, tea.Batch(cmds...)
-
-	case extSummaryMsg:
-		if msg.id == m.searchID {
-			if msg.err != nil {
-				return m, m.setFlash(msg.err.Error())
-			}
-			m.extSummary = msg.text
-		}
-		return m, nil
 
 	case pageMsg:
 		if msg.url == m.pendingPage {
@@ -824,9 +790,7 @@ func (m *Model) handleKey(msg tea.KeyMsg) tea.Cmd {
 		return m.editCurrent()
 	case k.is(key, ActEditResults):
 		if len(m.results) > 0 {
-			s := m.summary
-			s.Text = m.extSummary
-			return m.editContent("results.md", app.ResultsMarkdown(m.plan.Query.Text, m.plan.Engine.Name(), m.plan.Query.Kind, m.plan.Query.Page, m.results, s), 0)
+			return m.editContent("results.md", app.ResultsMarkdown(m.plan.Query.Text, m.plan.Engine.Name(), m.plan.Query.Kind, m.plan.Query.Page, m.results, app.Summary{}), 0)
 		}
 	case k.is(key, ActSummarizePage):
 		if hasResult {
@@ -839,9 +803,6 @@ func (m *Model) handleKey(msg tea.KeyMsg) tea.Cmd {
 			delete(m.pageErrs, r.URL)
 			return m.fetchPage(r.URL, "")
 		}
-	case k.is(key, ActToggleSummary):
-		m.showSummary = !m.showSummary
-		m.ensureVisible()
 	case k.is(key, ActNextPage):
 		if m.plan.Engine != nil {
 			m.opts.Page = m.plan.Query.Page + 1

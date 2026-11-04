@@ -333,7 +333,7 @@ func init() {
 				}
 				return r.setTheme(name)
 			}},
-		{name: "set", min: 2, usage: "{option}", desc: "set an option: summary, nosummary, layout=auto|split|stacked, results=N, snippetlines=N, theme=NAME, hintchars=CHARS", topic: "commands",
+		{name: "set", min: 2, usage: "{option}", desc: "set an option: layout=auto|split|stacked, results=N, snippetlines=N, theme=NAME, hintchars=CHARS", topic: "commands",
 			complete: func(*Root) []string { return setOptions },
 			run:      func(r *Root, in invocation) error { return r.set(in.args) }},
 		{name: "engines", min: 7, desc: "list engines", topic: "commands",
@@ -388,7 +388,7 @@ var Version = "dev"
 
 var helpTopics = []string{"keys", "commands", "panes", "tabs", "search", "results", "visual", "hints", "bangs", "mouse"}
 
-var setOptions = []string{"summary", "nosummary", "summary!", "layout=auto", "layout=split", "layout=stacked", "results=", "snippetlines=", "theme=", "hintchars="}
+var setOptions = []string{"layout=auto", "layout=split", "layout=stacked", "results=", "snippetlines=", "theme=", "hintchars="}
 
 func firstOr(s []string) string {
 	if len(s) > 0 {
@@ -569,18 +569,12 @@ func (r *Root) set(arg string) error {
 	p := r.focus
 	ui := &r.app.Cfg.UI
 	if arg == "" || arg == "all" {
-		r.pendingCmd = p.setFlash(fmt.Sprintf("summary=%v layout=%s results=%d snippetlines=%d theme=%s hintchars=%s",
-			p.showSummary, ui.Layout, max(p.opts.Limit, r.app.Cfg.Results), ui.SnippetLines, theme.NameOr(ui.Theme), orDefault(ui.HintChars, defaultHintChars)))
+		r.pendingCmd = p.setFlash(fmt.Sprintf("layout=%s results=%d snippetlines=%d theme=%s hintchars=%s",
+			ui.Layout, max(p.opts.Limit, r.app.Cfg.Results), ui.SnippetLines, theme.NameOr(ui.Theme), orDefault(ui.HintChars, defaultHintChars)))
 		return nil
 	}
 	key, val, hasVal := strings.Cut(arg, "=")
 	switch key {
-	case "summary":
-		p.showSummary = true
-	case "nosummary":
-		p.showSummary = false
-	case "summary!", "invsummary":
-		p.showSummary = !p.showSummary
 	case "layout":
 		if val != "auto" && val != "split" && val != "stacked" {
 			return errCmd("E474: layout must be auto, split or stacked")

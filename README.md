@@ -36,12 +36,12 @@ search -E                                # write the query in $EDITOR
   no key) with `--lang` and `--repo` filters. Results show line-numbered
   fragments. `Y` copies the code, and `e` opens the **full file** in
   `$EDITOR` at the matching line.
-- **Summaries on your device:** extractive multi-document summarisation that
-  finds the consensus across results and removes redundant sentences. It uses
-  no model and no network, and runs in milliseconds on weak hardware. Opening
-  a web result's details automatically fetches and summarises its page, with
-  readable text extraction. You can optionally pipe results to a local LLM
-  (`summary.command = "ollama run llama3.2:1b"`).
+- **Page summaries on your device:** opening a web result's details fetches
+  that page, extracts readable text and summarises it. It uses no model and no
+  network, and runs in milliseconds on weak hardware. Inline output can also
+  summarise the whole result set (`search -s`), optionally through a local LLM
+  (`summary.command = "ollama run llama3.2:1b"`). The TUI shows the summary of
+  the selected result's page, not of the result set.
 - **`$EDITOR` integration:** compose queries in a temporary Markdown file
   (`ctrl+e`, `search -E`). View the whole result set (`E`, `--edit`) or a
   fetched page as Markdown (`e`), or open source files (`e` on code results).
@@ -63,7 +63,7 @@ search -E                                # write the query in $EDITOR
   for opening links. If it's unset, `$BROWSER` and then the system default
   are used.
 - **Low-power mode:** `low_power = true` uses fewer results, smaller download
-  caps, no spinner animation and the summary bar is off by default.
+  caps and no spinner animation.
 - **Packaging:** a Nix flake and home-manager module for x86_64/aarch64 Linux
   and aarch64 macOS, plus Windows builds.
 
@@ -192,8 +192,7 @@ result numbers fail rather than printing an empty value.
 | `o` / `O` | open the selected URL / the engine's search page in the browser (`o` also works in VIEW) |
 | `y` / `Y` / `M` | copy the URL / snippet or code / Markdown link |
 | `e` | open the result in `$EDITOR` (page as Markdown, or the full code file at the matching line) |
-| `E` | open all results (with summary) as Markdown in `$EDITOR` |
-| `S` | toggle the results summary |
+| `E` | open all results as Markdown in `$EDITOR` |
 | `n`/`p`, `]`/`[` | next/previous results page (`N` also goes back) |
 | `tab` / `shift+tab` | engine picker dropdown (see below) |
 | `t` | cycle search type (web → code → repos → issues) |
@@ -291,7 +290,7 @@ abbreviations work (`:sp`, `:vs`, `:tabn`). `:N` jumps to result N.
 | `:pa[ge] N`, `:n[ext]`, `:prev[ious]`, `:ref[resh]`, `:wel[come]` | pages / re-run / back to the start page |
 | `:o[pen] [N]`, `:ya[nk] [N]`, `:co[py] [N]`, `:e[dit] [N]`, `:sum[marise] [N]` | act on result N (default: the selected one) |
 | `:exp[ort]`, `:comp[ose]` | all results as Markdown in `$EDITOR` / write the query in `$EDITOR` |
-| `:h[elp] [topic]`, `:the[me] [name]`, `:se[t] {option}` | help, live theme switching, options (`summary`, `nosummary`, `layout=split`, `results=N`, ...) |
+| `:h[elp] [topic]`, `:the[me] [name]`, `:se[t] {option}` | help, live theme switching, options (`layout=split`, `results=N`, `snippetlines=N`, `theme=NAME`, ...) |
 | `:engines`, `:ban[gs]`, `:his[tory]`, `:ve[rsion]`, `:redr[aw]` | lists and utilities |
 
 Mouse: the wheel scrolls, a click selects a result, a second click opens its
@@ -488,6 +487,10 @@ Terminal browsers (`w3m`, `lynx`, `links`, `elinks`, `browsh`, `carbonyl`,
 `chawan`) take over the terminal and return you to the TUI when they exit.
 
 ## How summaries work
+
+The TUI never shows a summary of the whole result set; it shows the summary
+of the page behind the selected result once its details are opened. Inline
+output still summarises a result set with `search -s`.
 
 `internal/summary` is a centroid-based multi-document summariser:
 

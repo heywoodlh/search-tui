@@ -31,7 +31,6 @@ const (
 	ActEditResults    Action = "edit_results"
 	ActCompose        Action = "compose"
 	ActSummarizePage  Action = "summarize_page"
-	ActToggleSummary  Action = "toggle_summary"
 	ActNextPage       Action = "next_page"
 	ActPrevPage       Action = "prev_page"
 	ActNextEngine     Action = "next_engine"
@@ -90,7 +89,6 @@ var actionDefs = []actionDef{
 	{ActEditResults, []string{"E"}, "open all results as Markdown in $EDITOR", ""},
 	{ActCompose, []string{"ctrl+e", "c"}, "compose query in $EDITOR", ""},
 	{ActOpenSearchPage, []string{"O"}, "open the engine's search page in browser", ""},
-	{ActToggleSummary, []string{"S"}, "toggle results summary", ""},
 	{ActNextPage, []string{"n", "]"}, "next results page", "next pg"},
 	{ActPrevPage, []string{"p", "N", "["}, "previous results page", "prev pg"},
 	{ActNextEngine, []string{"tab"}, "engine picker (press again to move down)", "engines"},

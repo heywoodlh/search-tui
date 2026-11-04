@@ -73,7 +73,7 @@ func TestPeekSeparatedAndPinnedWhenScrolling(t *testing.T) {
 	r.layout()
 	initial := stripANSI(r.View())
 	if !strings.Contains(initial, "────────") {
-		t.Fatalf("summary/peek needs a clear divider: %q (layout %+v)", initial, r.focus.layout())
+		t.Fatalf("peek needs a clear divider: %q (layout %+v)", initial, r.focus.layout())
 	}
 	for i := 0; i < 8; i++ {
 		rkey(r, "j")
@@ -84,6 +84,41 @@ func TestPeekSeparatedAndPinnedWhenScrolling(t *testing.T) {
 	}
 	if !strings.Contains(out, "────────") {
 		t.Error("divider should stay visible while scrolling")
+	}
+}
+
+func TestNoAggregateResultsSummary(t *testing.T) {
+	r := testRoot(t, 100, 30)
+	rs := []engine.Result{
+		{Title: "Kubernetes documentation", URL: "https://example.com/a", Snippet: "Kubernetes is an open source container orchestration system for automating software deployment, scaling and management."},
+		{Title: "Deployments", URL: "https://example.com/b", Snippet: "A Kubernetes deployment provides declarative updates for pods and replica sets in a container orchestration system."},
+		{Title: "Services", URL: "https://example.com/c", Snippet: "A service exposes an application running on pods inside the container orchestration system, Kubernetes."},
+	}
+	r.focus.setResults(rs)
+	r.focus.refreshDetail()
+	out := stripANSI(r.View())
+	for _, unwanted := range []string{"Summary", "related:"} {
+		if strings.Contains(out, unwanted) {
+			t.Errorf("results page still shows an aggregate summary (%q): %q", unwanted, out)
+		}
+	}
+	if !strings.Contains(out, "Kubernetes is an open source container") {
+		t.Errorf("selected-result peek missing: %q", out)
+	}
+	var l = r.focus.layout()
+	if l.peekH != 4 {
+		t.Errorf("peek strip should be 3 lines plus a divider: %+v", l)
+	}
+	// 30 rows minus the app-wide mode line and the pane's own status line,
+	// the input plus rule, and the peek strip.
+	if l.listH != 30-1-1-2-4 {
+		t.Errorf("result list should use every row left by the header, peek and status bar: %+v", l)
+	}
+	if strings.Contains(stripANSI(r.focus.detailContent(rs[0], 80)), "Summary") {
+		t.Error("result details should not show the results summary")
+	}
+	if err := r.set("summary"); err == nil {
+		t.Error(":set summary should report an unknown option")
 	}
 }
 
