@@ -261,6 +261,26 @@ func init() {
 			run: func(r *Root, in invocation) error { r.focus.reset(); return nil }},
 
 		// Acting on results ([N] = result number, default: the selected one).
+		{name: "open-link", min: 9, usage: "{N|URL}", desc: "open numbered link (result or fetched page) or URL in the browser", topic: "results",
+			complete: func(r *Root) []string { return r.linkCompletions() },
+			run: func(r *Root, in invocation) error {
+				u, err := r.focus.resolveLink(in.args)
+				if err != nil {
+					return err
+				}
+				r.pendingCmd = r.focus.openURL(u)
+				return nil
+			}},
+		{name: "copy-link", min: 9, usage: "{N|URL}", desc: "copy numbered link or URL to the configured clipboard", topic: "results",
+			complete: func(r *Root) []string { return r.linkCompletions() },
+			run: func(r *Root, in invocation) error {
+				u, err := r.focus.resolveLink(in.args)
+				if err != nil {
+					return err
+				}
+				r.pendingCmd = r.focus.copy(u, "link")
+				return nil
+			}},
 		{name: "open", min: 1, usage: "[N]", desc: "open the result in the browser", topic: "results",
 			run: func(r *Root, in invocation) error {
 				return r.onResult(in, func(p *Model, res engine.Result) tea.Cmd { return p.openURL(res.URL) })
@@ -280,9 +300,7 @@ func init() {
 		{name: "summarise", min: 3, aliases: []string{"summarize"}, usage: "[N]", desc: "fetch and summarise the result page", topic: "results",
 			run: func(r *Root, in invocation) error {
 				return r.onResult(in, func(p *Model, res engine.Result) tea.Cmd {
-					if p.layoutMode() != layoutSplit {
-						p.mode = modeDetail
-					}
+					p.mode = modeDetail
 					delete(p.pageErrs, res.URL)
 					return p.fetchPage(res.URL, "")
 				})
@@ -465,6 +483,7 @@ func (r *Root) execute(line string) tea.Cmd {
 		return nil
 	}
 	r.pendingCmd = nil
+	r.focus.err = nil
 	if in.newTab && (c.name == "split" || c.name == "vsplit" || c.name == "new" || c.name == "vnew") {
 		// :tab split opens the pane in a new tab instead.
 		return r.newTab(r.newPane(r.focus, c.name == "new" || c.name == "vnew"), in.args)
@@ -473,7 +492,6 @@ func (r *Root) execute(line string) tea.Cmd {
 		r.focus.err = err
 		return nil
 	}
-	r.focus.err = nil
 	cmd := r.pendingCmd
 	r.pendingCmd = nil
 	return cmd
@@ -616,12 +634,14 @@ func (r *Root) openCmd(prefill string) {
 	r.cmd.input.Focus()
 	r.cmd.hidx = len(r.cmd.hist)
 	r.cmd.comps = nil
+	r.layout()
 }
 
 func (r *Root) closeCmd() {
 	r.cmd.active = false
 	r.cmd.input.Blur()
 	r.cmd.comps = nil
+	r.layout()
 }
 
 func (r *Root) cmdKey(msg tea.KeyMsg) tea.Cmd {
@@ -677,6 +697,15 @@ func (r *Root) cmdKey(msg tea.KeyMsg) tea.Cmd {
 	return cmd
 }
 
+func (r *Root) linkCompletions() []string {
+	links := r.focus.links()
+	out := make([]string, 0, len(links))
+	for _, l := range links {
+		out = append(out, strconv.Itoa(l.n))
+	}
+	return out
+}
+
 // complete cycles through completions for the word being typed.
 func (r *Root) complete(forward bool) {
 	c := &r.cmd
@@ -699,7 +728,9 @@ func (r *Root) complete(forward bool) {
 		} else if cm, ok := lookup(parse(head).name); ok && cm.complete != nil {
 			cands = cm.complete(r)
 		}
-		sort.Strings(cands)
+		if cm, ok := lookup(parse(head).name); !ok || (cm.name != "open-link" && cm.name != "copy-link") {
+			sort.Strings(cands)
+		}
 		c.comps = nil
 		for _, cand := range cands {
 			if strings.HasPrefix(cand, word) {
@@ -746,8 +777,16 @@ func (r *Root) cmdView() string {
 	line := st.accent.Render(":") + st.snippet.Render(string(val[:pos])) + st.accent.Underline(true).Render(at) + st.snippet.Render(after)
 	if len(c.comps) > 1 && c.compIdx >= 0 {
 		var opts []string
+		in := parse(c.input.Value())
+		isLink := in.name == "open-link" || in.name == "copy-link"
+		links := r.focus.links()
 		for i, cand := range c.comps {
 			cand = cand[strings.LastIndexByte(cand, ' ')+1:]
+			if isLink {
+				if n, err := strconv.Atoi(cand); err == nil && n > 0 && n <= len(links) {
+					cand = fmt.Sprintf("[%d] %s", n, truncate(links[n-1].url, 24))
+				}
+			}
 			if i == c.compIdx {
 				cand = st.key.Render(cand)
 			} else {

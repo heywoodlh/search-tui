@@ -42,14 +42,14 @@ func version() string {
 
 type options struct {
 	engine, typ, lang, repo, config string
-	theme, browser                  string
+	theme, browser, field           string
 	listThemes                      bool
 	code, jsonOut, md, open, lucky  bool
 	printURL, tui, compose, edit    bool
 	summary, noSummary, noColor     bool
 	listEngines, listBangs, defCfg  bool
 	version                         bool
-	limit, page                     int
+	limit, page, result             int
 }
 
 // Main runs the CLI and returns the process exit code.
@@ -72,6 +72,8 @@ func run(args []string, stdout, stderr io.Writer) error {
 	fs.StringVarP(&o.repo, "repo", "r", "", "code repository filter (owner/name)")
 	fs.IntVarP(&o.limit, "limit", "n", 0, "number of results")
 	fs.IntVarP(&o.page, "page", "p", 1, "results page")
+	fs.IntVar(&o.result, "result", 0, "select result N (1-based; works with --json/--markdown)")
+	fs.StringVar(&o.field, "field", "", "print one result field: url, title, snippet, code (implies --result 1)")
 	fs.BoolVarP(&o.jsonOut, "json", "j", false, "print results as JSON")
 	fs.BoolVarP(&o.md, "markdown", "m", false, "print results as Markdown")
 	fs.BoolVarP(&o.open, "open", "o", false, "open the search page in a browser")
@@ -114,6 +116,19 @@ Flags:
 			return nil
 		}
 		return err
+	}
+	if o.result < 0 {
+		return errors.New("--result must be a positive 1-based number")
+	}
+	if o.field != "" {
+		switch o.field {
+		case "url", "title", "snippet", "code":
+		default:
+			return fmt.Errorf("unknown --field %q (use url, title, snippet, code)", o.field)
+		}
+		if o.jsonOut || o.md || o.edit || o.open || o.lucky || o.tui {
+			return errors.New("--field cannot be combined with --json, --markdown, --edit, --open, --lucky or --tui")
+		}
 	}
 	if o.version {
 		fmt.Fprintln(stdout, "search", version())
@@ -228,6 +243,24 @@ Flags:
 	if plan.Notice != "" {
 		fmt.Fprintln(stderr, "search:", plan.Notice)
 	}
+	if o.field != "" {
+		n := o.result
+		if n == 0 {
+			n = 1
+		}
+		selected, err := selectResult(rs, n)
+		if err != nil {
+			return err
+		}
+		return printField(stdout, selected, o.field)
+	}
+	if o.result > 0 {
+		selected, err := selectResult(rs, o.result)
+		if err != nil {
+			return err
+		}
+		rs = []engine.Result{selected}
+	}
 	if plan.Lucky || o.lucky {
 		if len(rs) == 0 {
 			return errors.New("no results")
@@ -277,6 +310,32 @@ Flags:
 	}
 	printResults(stdout, a.Theme, plan, rs, sum, showSummary)
 	return nil
+}
+
+func selectResult(rs []engine.Result, n int) (engine.Result, error) {
+	if n < 1 || n > len(rs) {
+		return engine.Result{}, fmt.Errorf("result %d out of range (got %d results)", n, len(rs))
+	}
+	return rs[n-1], nil
+}
+
+func printField(w io.Writer, r engine.Result, field string) error {
+	var value string
+	switch field {
+	case "url":
+		value = r.URL
+	case "title":
+		value = r.Title
+	case "snippet":
+		value = r.Snippet
+	case "code":
+		if r.Code == nil {
+			return errors.New("selected result has no code")
+		}
+		value = app.SnippetText(r)
+	}
+	_, err := fmt.Fprintln(w, safe.Text(value))
+	return err
 }
 
 func listEngines(a *app.App, w io.Writer) error {

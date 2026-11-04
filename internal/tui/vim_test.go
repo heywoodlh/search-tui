@@ -84,10 +84,9 @@ func TestTabs(t *testing.T) {
 	if len(r.tabs) != 2 || r.cur != 1 {
 		t.Fatalf(":tabnew: %d tabs, cur %d", len(r.tabs), r.cur)
 	}
-	if r.focus.mode != modeInsert {
-		t.Error("a new tab starts on the start page, ready to type")
+	if r.focus.mode != modeNormal {
+		t.Error("a new tab starts in normal mode")
 	}
-	special(r, tea.KeyEsc)
 	out := r.View()
 	if !strings.Contains(out, " 1 ") || !strings.Contains(out, " 2 ") {
 		t.Error("tab bar should show both tabs")
@@ -140,12 +139,12 @@ func TestResize(t *testing.T) {
 	for _, rc := range r.rects {
 		total += rc.h
 	}
-	if total != 40 {
+	if total != 39 { // 40 rows minus the bottom line
 		t.Errorf("heights sum to %d", total)
 	}
 	rkey(r, "ctrl+w", "=")
 	for _, rc := range r.rects {
-		if rc.h != 20 {
+		if rc.h != 20 && rc.h != 19 {
 			t.Errorf("ctrl+w = should equalise, got %d", rc.h)
 		}
 	}
@@ -397,5 +396,37 @@ func TestTabMove(t *testing.T) {
 	ex(r, "tabm")
 	if names() != "kubernetes,one,two" || r.cur != 2 {
 		t.Errorf(":tabm -> %s cur %d", names(), r.cur)
+	}
+}
+
+func TestBottomLineShowsModeOnce(t *testing.T) {
+	r := testRoot(t, 160, 40)
+	ex(r, "vsp")
+	out := r.View()
+	lines := strings.Split(out, "\n")
+	last := stripANSI(lines[len(lines)-1])
+	if !strings.HasPrefix(strings.TrimSpace(last), "NORMAL") {
+		t.Errorf("bottom-left should show the mode, got %q", last)
+	}
+	if strings.Count(stripANSI(out), "NORMAL") != 1 {
+		t.Error("the mode should appear once, at the bottom")
+	}
+	typeKeys(r, "/")
+	lines = strings.Split(r.View(), "\n")
+	if !strings.HasPrefix(strings.TrimSpace(stripANSI(lines[len(lines)-1])), "INSERT") {
+		t.Error("insert mode should show INSERT at the bottom left")
+	}
+	// The focused pane's status line has the focus marker; the other's not.
+	marked := 0
+	for _, p := range r.panes() {
+		if strings.Contains(stripANSI(p.viewStatus()), r.focus.st.pointer) {
+			marked++
+			if p != r.focus {
+				t.Error("an unfocused pane is marked")
+			}
+		}
+	}
+	if marked != 1 {
+		t.Errorf("%d panes marked as focused", marked)
 	}
 }

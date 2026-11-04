@@ -11,39 +11,15 @@ import (
 	"github.com/heywoodlh/tui-search/internal/safe"
 )
 
-type layoutKind int
-
-const (
-	layoutStacked layoutKind = iota
-	layoutSplit
-)
-
 type layoutInfo struct {
-	kind                    layoutKind
 	inputH, sumH, listTop   int
-	listH, listW, previewW  int
+	listH, listW            int
 	statusH, errH           int
 	compact, showDetailFull bool
 }
 
-func (m *Model) layoutMode() layoutKind {
-	switch m.app.Cfg.UI.Layout {
-	case "split":
-		if m.width >= 60 {
-			return layoutSplit
-		}
-	case "stacked":
-		return layoutStacked
-	default:
-		if m.width >= m.app.Cfg.UI.SplitMinWidth && m.height >= 12 {
-			return layoutSplit
-		}
-	}
-	return layoutStacked
-}
-
 func (m *Model) layout() layoutInfo {
-	l := layoutInfo{kind: m.layoutMode(), inputH: 1}
+	l := layoutInfo{inputH: 1}
 	if m.height >= 12 {
 		l.inputH = 2 // input + rule
 	}
@@ -53,14 +29,15 @@ func (m *Model) layout() layoutInfo {
 	if m.err != nil {
 		l.errH = 1
 	}
+	// Details are an on-demand full-width view; normal browsing never
+	// allocates a permanent second column for an empty preview.
 	l.listW = m.width
-	if l.kind == layoutSplit {
-		l.listW = max(m.width*45/100, 40)
-		l.previewW = m.width - l.listW
-	}
-	l.showDetailFull = (m.mode == modeDetail || m.mode == modeVisual) && l.kind == layoutStacked
+	l.showDetailFull = m.mode == modeDetail || m.mode == modeVisual
 	if m.showSummary && !m.summaryEmpty() && !l.showDetailFull && m.height >= 16 && m.mode != modeHelp {
 		l.sumH = len(m.summaryLines(m.width))
+	}
+	if len(m.results) > 0 && !l.showDetailFull && m.mode != modeHelp && m.height >= 12 {
+		l.sumH = max(l.sumH, 3) // compact selected-result peek
 	}
 	l.listTop = l.inputH + l.sumH
 	l.listH = max(m.height-l.listTop-l.statusH-l.errH, 0)
@@ -105,7 +82,8 @@ func (m *Model) renderItems() [][]string {
 				sub += " · " + r.Code.Language
 			}
 		}
-		lines = append(lines, m.st.url.Render(ansi.Truncate(sub, w, "…")))
+		ref := fmt.Sprintf("[%d] ", i+1) // link number for :open-link / :copy-link
+		lines = append(lines, m.st.muted.Render(ref)+m.st.url.Render(ansi.Truncate(sub, max(w-len(ref), 1), "…")))
 		if compact {
 			items[i] = lines
 			continue
@@ -328,14 +306,24 @@ func (m *Model) summaryLines(width int) []string {
 	return lines
 }
 
+func (m *Model) compactPeek() []string {
+	r, ok := m.current()
+	if !ok {
+		return nil
+	}
+	w := max(m.width-4, 1)
+	return []string{
+		" " + m.st.selTitle.Render(ansi.Truncate(r.Title, w, "…")),
+		" " + m.st.snippet.Render(ansi.Truncate(oneLine(r.Snippet), w, "…")),
+		" " + m.st.muted.Render(fmt.Sprintf("[%d] ", m.sel+1)) + m.st.url.Render(ansi.Truncate(displayURL(r.URL), max(w-6, 1), "…")),
+	}
+}
+
 // ---------------------------------------------------------------- detail
 
 func (m *Model) refreshDetail() {
 	l := m.layout()
-	w, h := l.previewW-2, l.listH
-	if l.kind == layoutStacked {
-		w = m.width - 1
-	}
+	w, h := m.width-1, l.listH
 	if w < 4 || h < 1 {
 		return
 	}
@@ -355,7 +343,7 @@ func (m *Model) detailContent(r engine.Result, w int) string {
 	for _, l := range wrap(r.Title) {
 		add(m.st.selTitle.Render(l))
 	}
-	add(m.st.url.Render(ansi.Hardwrap(r.URL, w, true)))
+	add(m.st.muted.Render(fmt.Sprintf("[%d] ", m.sel+1)) + m.st.url.Render(ansi.Hardwrap(r.URL, max(w-6, 8), true)))
 	if r.Meta != "" {
 		for _, l := range wrap(r.Meta) {
 			add(m.st.meta.Render(l))
@@ -392,7 +380,8 @@ func (m *Model) detailContent(r engine.Result, w int) string {
 			add("")
 		}
 		add(m.st.sumTitle.Render("Page"), m.st.border.Render(strings.Repeat("─", max(w, 1))))
-		md := p.Markdown
+		nums := m.pageLinkNumbers()
+		md := m.renderPageLinks(p.Markdown, nums)
 		limit := 400
 		if m.app.Cfg.LowPower {
 			limit = 120
@@ -407,6 +396,12 @@ func (m *Model) detailContent(r engine.Result, w int) string {
 				continue
 			}
 			add(wrap(l)...)
+		}
+		if links := m.links()[len(m.results):]; len(links) > 0 {
+			add("", m.st.sumTitle.Render("Links")+m.st.muted.Render(" (:open-link N, :copy-link N)"))
+			for _, l := range links {
+				add(ansi.Truncate(m.st.muted.Render(fmt.Sprintf("[%d] ", l.n))+m.st.url.Render(l.url), w, "…"))
+			}
 		}
 	} else if err, ok := m.pageErrs[r.URL]; ok {
 		add(m.st.err.Render(ansi.Wordwrap("page fetch failed: "+err.Error(), w, "")))
@@ -526,7 +521,11 @@ func (m *Model) viewHeader(l layoutInfo) string {
 	line := badge + m.inputView(m.width-lipgloss.Width(badge)-1)
 	line = ansi.Truncate(line, m.width, "")
 	if l.inputH > 1 {
-		return line + "\n" + m.st.border.Render(strings.Repeat("─", max(m.width, 1)))
+		rule := m.st.border
+		if m.focused && m.multi {
+			rule = m.st.bar // highlight the focused pane
+		}
+		return line + "\n" + rule.Render(strings.Repeat("─", max(m.width, 1)))
 	}
 	return line
 }
@@ -556,22 +555,23 @@ func (m *Model) render() string {
 	var parts []string
 	parts = append(parts, m.viewHeader(l))
 	if l.sumH > 0 {
-		parts = append(parts, strings.Join(m.summaryLines(m.width), "\n"))
+		var lines []string
+		if m.showSummary && !m.summaryEmpty() {
+			lines = m.summaryLines(m.width)
+		}
+		peek := m.compactPeek()
+		if len(lines) < l.sumH {
+			lines = append(lines, make([]string, l.sumH-len(lines))...)
+		}
+		if len(peek) > 0 {
+			copy(lines[len(lines)-len(peek):], peek) // overlay the summary, not the result list
+		}
+		parts = append(parts, strings.Join(lines, "\n"))
 	}
 	if l.listH > 0 {
-		switch {
-		case l.showDetailFull:
+		if l.showDetailFull {
 			parts = append(parts, m.viewDetail(l, m.width))
-		case l.kind == layoutSplit:
-			left := m.viewList(l)
-			sepStyle := m.st.border
-			if m.mode == modeDetail || m.mode == modeVisual {
-				sepStyle = m.st.bar
-			}
-			sep := sepStyle.Render(strings.TrimRight(strings.Repeat("│\n", l.listH), "\n"))
-			right := m.viewDetail(l, l.previewW-2)
-			parts = append(parts, lipgloss.JoinHorizontal(lipgloss.Top, left, sep, " ", right))
-		default:
+		} else {
 			parts = append(parts, m.viewList(l))
 		}
 	}
@@ -584,62 +584,106 @@ func (m *Model) render() string {
 	return strings.Join(parts, "\n")
 }
 
+// viewStatus is the pane's own status line (like a vim window's): engine,
+// query, position and activity. The focused pane's is drawn in the accent
+// colour with a marker when several panes are open; others are muted.
 func (m *Model) viewStatus() string {
-	if !m.focused {
-		return m.viewInactiveStatus()
+	parts := []string{m.app.Reg.Display(m.currentEngine())}
+	if k := m.plan.Query.Kind; k != "" && k != engine.KindWeb {
+		parts[0] += "·" + string(k)
 	}
-	var modeBadge string
-	switch {
-	case m.mode == modeVisual:
-		return m.withHints(m.visualStatus())
-	case m.hint.active:
-		label := " HINT"
-		if m.hint.open {
-			label = " OPEN"
+	if q := strings.TrimSpace(m.plan.Query.Text); q != "" {
+		parts = append(parts, q)
+	}
+	if len(m.results) > 0 {
+		pos := fmt.Sprintf("%d/%d", m.sel+1, len(m.results))
+		if m.plan.Query.Page > 1 {
+			pos += fmt.Sprintf(" p%d", m.plan.Query.Page)
 		}
-		return m.withHints(m.st.modeDet.Render(label) + m.st.statusBar.Render(" "+m.hint.typed+" "))
+		parts = append(parts, pos)
+	}
+	switch {
+	case m.loading:
+		parts = append(parts, m.spinner.View()+" searching")
+	case m.busy != "":
+		parts = append(parts, m.spinner.View()+" "+m.busy)
+	}
+	marker, style := " ", m.st.statusBar
+	switch {
+	case m.focused && m.multi:
+		marker, style = m.st.pointer, m.st.accent
+	case !m.focused:
+		style = m.st.muted
+	}
+	line := ansi.Truncate(marker+" "+strings.Join(parts, " · "), max(m.width, 1), "…")
+	return style.Render(line + strings.Repeat(" ", max(m.width-lipgloss.Width(line), 0)))
+}
+
+// modeBadge names the focused pane's mode for the bottom line, like vim's
+// "-- INSERT --".
+func (m *Model) modeBadge() string {
+	switch {
+	case m.mode == modeVisual && m.vis.line:
+		return m.st.modeDet.Render("V-LINE")
+	case m.mode == modeVisual:
+		return m.st.modeDet.Render("VISUAL")
+	case m.hint.active && m.hint.open:
+		return m.st.modeDet.Render("OPEN")
+	case m.hint.active:
+		return m.st.modeDet.Render("HINT")
 	}
 	switch m.mode {
 	case modeInsert:
-		modeBadge = m.st.modeIns.Render(" INS")
+		return m.st.modeIns.Render("INSERT")
 	case modeDetail:
-		modeBadge = m.st.modeDet.Render(" VIEW")
+		return m.st.modeDet.Render("VIEW")
 	case modeHelp:
-		modeBadge = m.st.modeDet.Render(" HELP")
-	default:
-		modeBadge = m.st.modeNorm.Render(" NOR")
+		return m.st.modeDet.Render("HELP")
 	}
-	bar := m.st.statusBar
-	left := modeBadge
-	info := ""
-	if len(m.results) > 0 {
-		info = fmt.Sprintf(" %d/%d", m.sel+1, len(m.results))
-		if m.plan.Query.Page > 1 {
-			info += fmt.Sprintf(" p%d", m.plan.Query.Page)
+	return m.st.modeNorm.Render("NORMAL")
+}
+
+// showcmd is the count and keys typed so far, like vim's 'showcmd'.
+func (m *Model) showcmd() string {
+	s := ""
+	if m.count > 0 {
+		s = fmt.Sprint(m.count)
+	}
+	s += strings.Join(m.pending, "")
+	switch {
+	case m.mode == modeVisual:
+		s = fmt.Sprintf("%d:%d", m.vis.cur.row+1, m.vis.cur.col+1)
+		if m.vis.line {
+			a, b := m.vis.bounds()
+			s += fmt.Sprintf(" (%d lines)", b.row-a.row+1)
 		}
+		s += " " + m.vis.pending
+	case m.hint.active:
+		s = m.hint.typed
+	case m.windowPending:
+		s = "^W"
 	}
-	if m.count > 0 || len(m.pending) > 0 {
-		// Like vim's showcmd: the count and keys typed so far.
-		if m.count > 0 {
-			info += fmt.Sprintf(" %d", m.count)
-		}
-		info += " " + strings.Join(m.pending, "")
+	return strings.TrimSpace(s)
+}
+
+// bottomLine is the line at the very bottom of the application: the mode
+// at the left (like vim), pending keys, messages, and key hints at the
+// right. The root renders it once for the focused pane.
+func (m *Model) bottomLine(width int) string {
+	left := " " + m.modeBadge()
+	if sc := m.showcmd(); sc != "" {
+		left += " " + m.st.statusBar.Render(sc)
 	}
-	if m.loading {
-		info += " " + m.spinner.View() + " searching"
-	} else if m.busy != "" {
-		info += " " + m.spinner.View() + " " + m.busy
-	}
-	left += bar.Render(info + " ")
-	avail := m.width - lipgloss.Width(left)
+	left += " "
+	avail := width - lipgloss.Width(left)
 	var right string
 	if m.flash != "" {
-		right = bar.Render(ansi.Truncate(" "+safe.Line(m.flash)+" ", max(avail, 0), "…"))
+		right = m.st.statusBar.Render(ansi.Truncate(safe.Line(m.flash)+" ", max(avail, 0), "…"))
 	} else {
 		right = m.renderHints(m.statusHints(), avail)
 	}
-	fill := max(m.width-lipgloss.Width(left)-lipgloss.Width(right), 0)
-	return ansi.Truncate(left+bar.Render(strings.Repeat(" ", fill))+right, m.width, "")
+	fill := max(width-lipgloss.Width(left)-lipgloss.Width(right), 0)
+	return ansi.Truncate(left+strings.Repeat(" ", fill)+right, width, "")
 }
 
 func (m *Model) statusHints() [][2]string {
@@ -756,35 +800,4 @@ func (m *Model) inputView(width int) string {
 		after = string(val[pos+1 : end])
 	}
 	return text.Render(before) + cursor.Render(at) + text.Render(after)
-}
-
-// viewInactiveStatus is the status line of a pane without focus: muted, like
-// an inactive window in vim, naming the engine, query and position.
-func (m *Model) viewInactiveStatus() string {
-	parts := []string{" " + m.app.Reg.Display(m.currentEngine())}
-	if q := strings.TrimSpace(m.plan.Query.Text); q != "" {
-		parts = append(parts, q)
-	}
-	if len(m.results) > 0 {
-		parts = append(parts, fmt.Sprintf("%d/%d", m.sel+1, len(m.results)))
-	}
-	if m.loading {
-		parts = append(parts, "searching")
-	}
-	line := strings.Join(parts, " · ")
-	line = ansi.Truncate(line, max(m.width-1, 1), "…")
-	return m.st.muted.Render(line + strings.Repeat(" ", max(m.width-lipgloss.Width(line), 0)))
-}
-
-// withHints completes a status line from its left part plus key hints.
-func (m *Model) withHints(left string) string {
-	avail := m.width - lipgloss.Width(left)
-	var right string
-	if m.flash != "" {
-		right = m.st.statusBar.Render(ansi.Truncate(" "+safe.Line(m.flash)+" ", max(avail, 0), "…"))
-	} else {
-		right = m.renderHints(m.statusHints(), avail)
-	}
-	fill := max(m.width-lipgloss.Width(left)-lipgloss.Width(right), 0)
-	return ansi.Truncate(left+strings.Repeat(" ", fill)+right, m.width, "")
 }

@@ -18,8 +18,8 @@ low_power = false                 # fewer results, smaller downloads, no animati
 #                                 # (xdg-open / open / Windows default / Termux). "default" forces the
 #                                 # system default. Terminal browsers (w3m, lynx, ...) run inside the TUI.
 # editor = "nvim"                 # default: $VISUAL, $EDITOR
-clipboard = "auto"                # auto | osc52 | command | none
-# clipboard_command = "wl-copy"
+clipboard = "auto"                # auto | osc52 | tmux | command | none
+# clipboard_command = "tmux load-buffer -" # user shell command/pipeline; text on stdin
 
 [summary]
 enabled = true
@@ -30,8 +30,8 @@ sentences = 3
 
 [ui]
 mouse = true
-layout = "auto"                   # auto | split | stacked
-split_min_width = 110             # auto layout uses a preview pane from this width
+layout = "auto"                   # legacy setting; details now open full-width on demand
+split_min_width = 110             # retained for compatibility with older configs
 snippet_lines = 2
 # hint_chars = "asdfghjkl"        # labels for f/F result hints
 status_bar = true

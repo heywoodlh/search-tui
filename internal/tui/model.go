@@ -814,7 +814,7 @@ func (m *Model) handleKey(msg tea.KeyMsg) tea.Cmd {
 			if r.Code != nil {
 				return m.setFlash("summaries apply to web pages; press e to open the file")
 			}
-			if m.mode == modeNormal && m.layoutMode() != layoutSplit {
+			if m.mode == modeNormal {
 				m.mode = modeDetail
 			}
 			delete(m.pageErrs, r.URL)
@@ -890,7 +890,6 @@ func (m *Model) handleMouse(msg tea.MouseMsg) tea.Cmd {
 		return m.pickerMouse(msg)
 	}
 	l := m.layout()
-	inPreview := l.previewW > 0 && msg.X >= l.listW
 	switch msg.Button {
 	case tea.MouseButtonWheelDown, tea.MouseButtonWheelUp:
 		d := 1
@@ -904,7 +903,7 @@ func (m *Model) handleMouse(msg tea.MouseMsg) tea.Cmd {
 			} else {
 				m.help.ScrollUp(3)
 			}
-		case m.mode == modeDetail || inPreview:
+		case m.mode == modeDetail:
 			if d > 0 {
 				m.detail.ScrollDown(3)
 			} else {
@@ -927,11 +926,7 @@ func (m *Model) handleMouse(msg tea.MouseMsg) tea.Cmd {
 			m.mode = m.prev
 			return nil
 		}
-		if inPreview {
-			m.mode = modeDetail
-			return nil
-		}
-		if m.mode == modeDetail && l.previewW == 0 {
+		if m.mode == modeDetail {
 			return nil
 		}
 		y := msg.Y - l.listTop

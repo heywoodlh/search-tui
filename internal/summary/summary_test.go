@@ -50,7 +50,7 @@ func TestExtractPage(t *testing.T) {
 <ul><li>item one</li><li>item two</li></ul><pre>fmt.Println("hi")</pre>
 <p>Second paragraph that explains more about the topic at hand in some detail so that the article is long enough.</p></article>
 <footer>Footer</footer></body></html>`
-	title, md := ExtractPage(html)
+	title, md := ExtractPage(html, "https://example.com/docs/page")
 	if title != "T" {
 		t.Errorf("title = %q", title)
 	}
@@ -63,5 +63,25 @@ func TestExtractPage(t *testing.T) {
 		if strings.Contains(md, bad) {
 			t.Errorf("boilerplate %q leaked:\n%s", bad, md)
 		}
+	}
+}
+
+func TestExtractPageLinks(t *testing.T) {
+	html := `<html><body><article><p>See the <a href="/guide">user guide</a>, <a href="https://other.example/x#frag">another site</a>,
+<a href="#top">a fragment</a>, <a href="mailto:a@b.c">mail</a> and <a href="javascript:alert(1)">evil</a> for details on everything here.</p>
+<p>More words so the article is long enough to be picked as the main content of this test page.</p></article></body></html>`
+	_, md := ExtractPage(html, "https://example.com/docs/page")
+	for _, want := range []string{"[user guide](https://example.com/guide)", "[another site](https://other.example/x)", "a fragment", "mail", "evil"} {
+		if !strings.Contains(md, want) {
+			t.Errorf("missing %q in %s", want, md)
+		}
+	}
+	for _, bad := range []string{"javascript:", "mailto:", "#top"} {
+		if strings.Contains(md, bad) {
+			t.Errorf("unsafe or useless link %q kept: %s", bad, md)
+		}
+	}
+	if got := StripLinks("a [b](https://x.y/z) c"); got != "a b c" {
+		t.Errorf("StripLinks = %q", got)
 	}
 }

@@ -48,9 +48,9 @@ search -E                                # write the query in $EDITOR
 - **Navigation:** vim keys, arrow keys and the mouse (wheel, click, click
   again for details). All keybindings can be changed, and a status bar shows
   hints that fit the terminal width.
-- **Responsive layout:** a split list and preview pane on wide terminals, and
-  a stacked layout on phones, tablets and narrow tmux panes. It reflows live
-  when you resize.
+- **Responsive layout:** a compact selected-result peek overlays the summary
+  instead of reserving an empty preview pane; open the full-width page view
+  on demand. It reflows live on phones, tablets and wide terminals.
 - **Credentials:** set them literally or with `*_env`, `*_file` or
   `*_command` (works with `pass`, `op`, `gh auth token`, agenix, sops-nix and
   so on).
@@ -160,6 +160,8 @@ search [flags] <query...>    search inline
   -n, --limit N         number of results           -p, --page N
   -s, --summary         print the summary           --no-summary
   -j, --json            JSON output                 -m, --markdown
+      --result N        select the Nth result (1-based)
+      --field FIELD     print url, title, snippet or code from one result
   -o, --open            open the search page in a browser
   -1, --lucky           open the first result
   -u, --url             print the engine's search URL
@@ -171,6 +173,9 @@ search [flags] <query...>    search inline
 ```
 
 Queries can also come from stdin: `echo "rust lifetimes" | search -m`.
+For scripts, `search --field url --result 2 'query'` prints just one URL;
+`--result` also filters `--json` and `--markdown` output. Invalid or missing
+result numbers fail rather than printing an empty value.
 
 ### TUI keybindings (defaults)
 
@@ -204,7 +209,15 @@ Queries can also come from stdin: `echo "rust lifetimes" | search -m`.
 
 In insert mode, `enter` searches, `esc` returns to the results, `tab`
 completes a `!bang` (or opens the engine picker), `↑`/`↓` move through
-history and `ctrl+e` opens `$EDITOR`.
+history and `ctrl+e` opens `$EDITOR`. New panes and tabs start in normal mode;
+press `/` to edit their queries. The active mode appears once at the bottom
+left of the whole application, while each pane has a focus-highlighted status.
+
+Result and fetched-page links are numbered `[1]`, `[2]`, … in the TUI.
+`:open-link 2` opens a link in the browser and `:copy-link 2` copies it;
+both also accept a full HTTP(S) URL. After either command and a space, Tab
+lists the available numbered links and cycles through them (Shift+Tab goes
+backwards). Fetched-page links become available after `s` or `:summarise`.
 
 **Engine picker:** `tab` opens a dropdown under the search bar listing every
 usable engine with its bang and search types. Move with `↑`/`↓`, `j`/`k`, or
@@ -393,7 +406,8 @@ timeout = "15s"
 low_power = false
 browser = ""                     # see "Browser" below; unset = $BROWSER, then the system default
 editor = ""                      # $VISUAL / $EDITOR
-clipboard = "auto"               # auto | osc52 | command | none
+clipboard = "auto"               # auto | osc52 | tmux | command | none
+# clipboard_command = "tmux load-buffer -"  # runs through shell; copied text on stdin
 
 [summary]
 enabled = true
@@ -402,7 +416,7 @@ sentences = 3
 
 [ui]
 mouse = true
-layout = "auto"                  # auto | split | stacked
+layout = "auto"                  # legacy setting; details now open full-width on demand
 split_min_width = 110
 snippet_lines = 2
 theme = "default"                # search --list-themes
@@ -412,7 +426,10 @@ ascii = false
 
 Clipboard support: `auto` uses `wl-copy`, `xclip`/`xsel`, `pbcopy`, `clip`
 or `termux-clipboard-set` when it finds one. Otherwise it falls back to OSC 52,
-which works over SSH and inside tmux and screen. Over SSH it sends OSC 52 too.
+which works over SSH and inside tmux and screen. `clipboard = "tmux"` loads the
+tmux paste buffer directly. Set `clipboard_command` to a custom shell command
+or pipeline reading the text on stdin (for example `tmux load-buffer -`);
+it takes precedence in `auto`, `command` and `tmux` modes.
 
 ## Themes
 

@@ -1,6 +1,7 @@
 package sys
 
 import (
+	"os"
 	"path/filepath"
 	"runtime"
 	"strings"
@@ -117,5 +118,37 @@ func TestOpenURLRejectsUnsafeSchemes(t *testing.T) {
 		if err := OpenURL("true", u); err == nil {
 			t.Errorf("OpenURL(%q) should be refused", u)
 		}
+	}
+}
+
+func TestClipboardCommand(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("uses sh")
+	}
+	out := filepath.Join(t.TempDir(), "clip")
+	how, err := Copy("hello | world", "auto", "cat > "+out)
+	if err != nil || how != "cat" {
+		t.Fatalf("Copy = %q, %v", how, err)
+	}
+	b, _ := os.ReadFile(out)
+	if string(b) != "hello | world" {
+		t.Errorf("clipboard got %q", b)
+	}
+	// A pipeline, as tmux users would configure.
+	if _, err := Copy("x", "command", "tr x y > "+out); err != nil {
+		t.Fatal(err)
+	}
+	if b, _ := os.ReadFile(out); string(b) != "y" {
+		t.Errorf("pipeline got %q", b)
+	}
+	if _, err := Copy("x", "auto", "exit 3"); err == nil || !strings.Contains(err.Error(), "clipboard_command") {
+		t.Errorf("failing command should be reported, got %v", err)
+	}
+	if _, err := Copy("x", "none", ""); err == nil {
+		t.Error("none should refuse")
+	}
+	// The tmux preset uses tmux load-buffer unless overridden.
+	if _, err := Copy("x", "tmux", "cat > "+out); err != nil {
+		t.Fatal(err)
 	}
 }

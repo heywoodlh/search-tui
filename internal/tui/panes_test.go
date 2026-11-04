@@ -113,7 +113,7 @@ func TestClosePanes(t *testing.T) {
 	total := 0
 	for _, rc := range r.rects {
 		total += rc.w
-		if rc.h != 40 {
+		if rc.h != 39 { // 40 rows minus the app-wide bottom line
 			t.Errorf("pane height %d after collapse", rc.h)
 		}
 	}
@@ -214,7 +214,8 @@ func TestSeparatorSpansNestedColumn(t *testing.T) {
 	rkey(r, "ctrl+w", "v", "ctrl+w", "s")
 	left := r.panes()[0]
 	col := r.rects[left].w
-	for i, l := range strings.Split(r.View(), "\n") {
+	lines := strings.Split(r.View(), "\n")
+	for i, l := range lines[:len(lines)-1] { // all but the bottom line
 		if []rune(stripANSI(l))[col] != '│' {
 			t.Fatalf("separator missing on line %d", i)
 		}

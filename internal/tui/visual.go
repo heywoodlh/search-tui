@@ -1,7 +1,6 @@
 package tui
 
 import (
-	"fmt"
 	"strings"
 	"unicode"
 
@@ -62,7 +61,7 @@ func (m *Model) visualLines(r engine.Result) [][]rune {
 			}
 		}
 		add("")
-		add(strings.Split(p.Markdown, "\n")...)
+		add(strings.Split(m.renderPageLinks(p.Markdown, m.pageLinkNumbers()), "\n")...)
 	}
 	lines := make([][]rune, len(out))
 	for i, l := range out {
@@ -460,21 +459,4 @@ func (m *Model) visualView(w, h int) string {
 		out = append(out, "")
 	}
 	return strings.Join(out, "\n")
-}
-
-// visualStatus is the left part of the status line in visual mode.
-func (m *Model) visualStatus() string {
-	label := " VISUAL"
-	if m.vis.line {
-		label = " V-LINE"
-	}
-	a, b := m.vis.bounds()
-	info := fmt.Sprintf(" %d:%d", m.vis.cur.row+1, m.vis.cur.col+1)
-	if m.vis.line {
-		info += fmt.Sprintf(" (%d lines)", b.row-a.row+1)
-	}
-	if m.vis.pending != "" {
-		info += " " + m.vis.pending
-	}
-	return m.st.modeDet.Render(label) + m.st.statusBar.Render(info+" ")
 }

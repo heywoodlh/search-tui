@@ -245,12 +245,12 @@ func (a *App) FetchPage(ctx context.Context, u, query string) (Page, error) {
 	p := Page{URL: u}
 	ct := hdr.Get("Content-Type")
 	if strings.Contains(ct, "html") || ct == "" {
-		p.Title, p.Markdown = summary.ExtractPage(string(body))
+		p.Title, p.Markdown = summary.ExtractPage(string(body), u)
 	} else {
 		p.Markdown = string(body)
 	}
 	p.Title, p.Markdown = safe.Line(p.Title), safe.Text(p.Markdown)
-	p.Summary = summary.SummarizeText(p.Markdown, query, max(a.Cfg.Summary.Sentences, 3))
+	p.Summary = summary.SummarizeText(summary.StripLinks(p.Markdown), query, max(a.Cfg.Summary.Sentences, 3))
 	a.mu.Lock()
 	if len(a.pages) > 32 { // keep memory bounded on small devices
 		a.pages = map[string]Page{}

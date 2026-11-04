@@ -15,18 +15,35 @@ import (
 	"github.com/heywoodlh/tui-search/internal/safe"
 )
 
-// Copy places text on the clipboard. mode is "auto", "osc52", "command" or
-// "none"; command is an optional custom copy command reading stdin.
-// It returns a short description of the method used.
+// Copy places text on the clipboard and returns a short description of the
+// method used. mode is:
+//
+//	auto     clipboard_command if set, else a detected tool (wl-copy, xclip,
+//	         xsel, pbcopy, clip, termux-clipboard-set), else OSC 52
+//	command  only clipboard_command or a detected tool
+//	tmux     the tmux paste buffer (tmux load-buffer -w -; -w also sets the
+//	         system clipboard through tmux where supported)
+//	osc52    terminal escape sequence (works over SSH)
+//	none     disabled
+//
+// clipboard_command is run through the shell with the text on stdin, so
+// pipelines work, e.g. "tmux load-buffer -" or "xclip -selection primary".
 func Copy(text, mode, command string) (string, error) {
 	switch mode {
 	case "none", "off":
-		return "", errors.New("clipboard disabled")
+		return "", errors.New("clipboard disabled (clipboard = \"none\")")
 	case "osc52":
 		return "osc52", copyOSC52(text)
+	case "tmux":
+		if command == "" {
+			command = "tmux load-buffer -w -"
+		}
 	}
 	if command != "" {
-		return command, pipeTo(SplitCommand(command), text)
+		if err := shellPipe(command, text); err != nil {
+			return "", fmt.Errorf("clipboard_command %q: %w", command, err)
+		}
+		return firstWord(command), nil
 	}
 	if args := clipboardCommand(); args != nil {
 		if err := pipeTo(args, text); err == nil {
@@ -41,6 +58,32 @@ func Copy(text, mode, command string) (string, error) {
 		return "", errors.New("no clipboard command found (install wl-copy, xclip, xsel or set clipboard_command)")
 	}
 	return "osc52", copyOSC52(text)
+}
+
+func firstWord(s string) string {
+	if f := strings.Fields(s); len(f) > 0 {
+		return f[0]
+	}
+	return s
+}
+
+// shellPipe runs a user-configured command through the shell with text on
+// stdin.
+func shellPipe(command, text string) error {
+	var c *exec.Cmd
+	if runtime.GOOS == "windows" {
+		c = exec.Command("cmd", "/C", command) //nolint:gosec,noctx // G204: user-configured clipboard_command
+	} else {
+		c = exec.Command("sh", "-c", command) //nolint:gosec,noctx // G204: user-configured clipboard_command
+	}
+	c.Stdin = strings.NewReader(text)
+	if out, err := c.CombinedOutput(); err != nil {
+		if msg := strings.TrimSpace(string(out)); msg != "" {
+			return fmt.Errorf("%w: %s", err, safe.Line(msg))
+		}
+		return err
+	}
+	return nil
 }
 
 func clipboardCommand() []string {

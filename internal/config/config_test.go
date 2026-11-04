@@ -82,6 +82,10 @@ func TestSecretPermissionWarning(t *testing.T) {
 	if err := os.WriteFile(p, []byte("[engines.brave]\napi_key = \"literal\"\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
+	// WriteFile honours the process umask; make the intended exposure explicit.
+	if err := os.Chmod(p, 0o644); err != nil {
+		t.Fatal(err)
+	}
 	c, err := Load(p)
 	if err != nil {
 		t.Fatal(err)

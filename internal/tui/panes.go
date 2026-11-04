@@ -6,6 +6,7 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
+	"github.com/charmbracelet/x/ansi"
 	"github.com/heywoodlh/tui-search/internal/app"
 )
 
@@ -140,7 +141,11 @@ func (r *Root) layout() {
 	if len(r.tabs) > 1 {
 		top = 1 // tab bar
 	}
-	r.place(r.tree, rect{0, top, r.width, max(r.height-top, 1)})
+	bottom := 0
+	if *r.app.Cfg.UI.StatusBar || r.cmd.active {
+		bottom = 1 // the app-wide mode / command line
+	}
+	r.place(r.tree, rect{0, top, r.width, max(r.height-top-bottom, 1)})
 	multi := len(r.rects) > 1
 	for p, rc := range r.rects {
 		p.focused = p == r.focus
@@ -270,6 +275,9 @@ func (r *Root) newPane(src *Model, empty bool) *Model {
 	p.pid = r.nextID
 	r.nextID++
 	p.flash = ""
+	// New panes and tabs open in normal mode; press / or i to type.
+	p.mode = modeNormal
+	p.input.Blur()
 	return p
 }
 
@@ -777,16 +785,27 @@ func (r *Root) View() string {
 	if r.width <= 0 || r.height <= 0 {
 		return ""
 	}
+	if r.height == 1 {
+		if r.cmd.active {
+			return r.cmdView()
+		}
+		if *r.app.Cfg.UI.StatusBar {
+			return r.focus.bottomLine(r.width)
+		}
+		return ansi.Truncate(strings.Split(r.render(r.tree), "\n")[0], r.width, "")
+	}
 	out := r.render(r.tree)
 	if len(r.tabs) > 1 {
 		bar, _ := r.tabBar()
 		out = lipgloss.NewStyle().Width(r.width).MaxWidth(r.width).Render(bar) + "\n" + out
 	}
-	if r.cmd.active {
-		// The command line replaces the bottom row, like vim's.
-		lines := strings.Split(out, "\n")
-		lines[len(lines)-1] = r.cmdView()
-		out = strings.Join(lines, "\n")
+	// The bottom row is shared, like vim's: the mode and messages, or the
+	// command line while typing one.
+	switch {
+	case r.cmd.active:
+		out += "\n" + r.cmdView()
+	case *r.app.Cfg.UI.StatusBar:
+		out += "\n" + r.focus.bottomLine(r.width)
 	}
 	return out
 }
