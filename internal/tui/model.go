@@ -67,22 +67,24 @@ type Model struct {
 	width, height int
 	mode, prev    mode
 
-	opts     app.PlanOptions
-	initOpts app.PlanOptions // restored when esc returns to the start page
-	picker   picker
-	plan     app.Plan
-	results  []engine.Result
-	sel      int
-	offset   int
+	opts         app.PlanOptions
+	initOpts     app.PlanOptions // restored when esc returns to the start page
+	picker       picker
+	plan         app.Plan
+	previousPlan app.Plan // plan for results still on screen while another page loads
+	results      []engine.Result
+	sel          int
+	offset       int
 
 	summary     app.Summary
 	showSummary bool
 	extSummary  string
 
-	loading  bool
-	searchID int
-	cancel   context.CancelFunc
-	busy     string // background activity label (fetching page...)
+	loading     bool
+	searchID    int
+	cancel      context.CancelFunc
+	busy        string // background activity label (fetching page...)
+	pendingPage string // URL whose page fetch currently owns the activity indicator
 
 	err      error
 	flash    string
@@ -279,6 +281,7 @@ func (m *Model) search(text string) tea.Cmd {
 	m.searchID++
 	id := m.searchID
 	m.loading = true
+	m.previousPlan = m.plan
 	m.plan = plan
 	m.mode = modeNormal
 	m.input.Blur()
@@ -335,6 +338,7 @@ func (m *Model) fetchPage(u, then string) tea.Cmd {
 		return func() tea.Msg { return pageMsg{pid: m.pid, url: u, page: p, then: then} }
 	}
 	m.busy = "fetching page…"
+	m.pendingPage = u
 	a, q, d := m.app, m.plan.Query.Text, m.timeout()
 	return tea.Batch(m.spinner.Tick, func() tea.Msg {
 		ctx, cancel := context.WithTimeout(context.Background(), d)
@@ -462,6 +466,24 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 		m.loading = false
+		if msg.err == nil && msg.plan.Engine != nil && msg.plan.Engine.Name() == "bing" &&
+			m.previousPlan.Engine != nil && msg.plan.Query.Page > 1 && msg.plan.Query.Page != m.previousPlan.Query.Page &&
+			len(msg.results) > 0 && len(msg.results) == len(m.results) {
+			same := true
+			for i := range msg.results {
+				if msg.results[i].URL != m.results[i].URL {
+					same = false
+					break
+				}
+			}
+			if same {
+				m.plan = m.previousPlan
+				m.opts.Page = m.plan.Query.Page
+				m.err = fmt.Errorf("bing returned the same results for page %d; pagination may be blocked", msg.plan.Query.Page)
+				m.resize()
+				return m, nil
+			}
+		}
 		m.plan = msg.plan
 		if msg.err != nil {
 			if errors.Is(msg.err, context.Canceled) {
@@ -500,7 +522,10 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case pageMsg:
-		m.busy = ""
+		if msg.url == m.pendingPage {
+			m.busy = ""
+			m.pendingPage = ""
+		}
 		if msg.err != nil {
 			m.pageErrs[msg.url] = msg.err
 			if msg.then == "edit" {
@@ -745,10 +770,6 @@ func (m *Model) handleKey(msg tea.KeyMsg) tea.Cmd {
 		case k.is(key, ActBottom):
 			m.detail.GotoBottom()
 			return nil
-		case msg.String() == "enter":
-			if r, ok := m.current(); ok {
-				return m.openURL(r.URL)
-			}
 		}
 	}
 
@@ -772,10 +793,8 @@ func (m *Model) handleKey(msg tea.KeyMsg) tea.Cmd {
 	case k.is(key, ActPageUp):
 		m.move(-n * max(m.listHeight()/m.itemHeightGuess(), 1))
 	case k.is(key, ActDetails):
-		if hasResult {
-			m.mode = modeDetail
-			m.refreshDetail()
-			m.detail.GotoTop()
+		if hasResult && m.mode == modeNormal {
+			return m.showDetails()
 		}
 	case k.is(key, ActOpen):
 		if hasResult {
@@ -873,6 +892,23 @@ func (m *Model) completeBang() bool {
 	return true
 }
 
+func (m *Model) showDetails() tea.Cmd {
+	r, ok := m.current()
+	if !ok {
+		return nil
+	}
+	m.mode = modeDetail
+	m.refreshDetail()
+	m.detail.GotoTop()
+	if r.Code == nil && m.pendingPage != r.URL {
+		if _, cached := m.pages[r.URL]; !cached {
+			delete(m.pageErrs, r.URL)
+			return m.fetchPage(r.URL, "")
+		}
+	}
+	return nil
+}
+
 func (m *Model) move(d int) {
 	if len(m.results) == 0 {
 		return
@@ -942,9 +978,7 @@ func (m *Model) handleMouse(msg tea.MouseMsg) tea.Cmd {
 			m.input.Blur()
 		}
 		if idx == m.sel {
-			m.mode = modeDetail
-			m.refreshDetail()
-			return nil
+			return m.showDetails()
 		}
 		m.sel = idx
 		m.ensureVisible()

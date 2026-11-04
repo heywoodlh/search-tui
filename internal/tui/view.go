@@ -36,8 +36,8 @@ func (m *Model) layout() layoutInfo {
 	if m.showSummary && !m.summaryEmpty() && !l.showDetailFull && m.height >= 16 && m.mode != modeHelp {
 		l.sumH = len(m.summaryLines(m.width))
 	}
-	if len(m.results) > 0 && !l.showDetailFull && m.mode != modeHelp && m.height >= 12 {
-		l.sumH = max(l.sumH, 3) // compact selected-result peek
+	if len(m.results) > 0 && !l.showDetailFull && m.mode != modeHelp && m.height >= 9 {
+		l.sumH = max(l.sumH, 3) + 1 // pinned peek plus a separate divider
 	}
 	l.listTop = l.inputH + l.sumH
 	l.listH = max(m.height-l.listTop-l.statusH-l.errH, 0)
@@ -408,8 +408,8 @@ func (m *Model) detailContent(r engine.Result, w int) string {
 	} else if m.busy != "" {
 		add(m.st.muted.Render(m.busy))
 	} else {
-		add(m.st.muted.Render(ansi.Wordwrap(fmt.Sprintf("%s fetch & summarise page · %s read in $EDITOR · %s open in browser · %s copy URL",
-			m.keys.first(ActSummarizePage), m.keys.first(ActEdit), m.keys.first(ActOpen), m.keys.first(ActYankURL)), w, "")))
+		add(m.st.muted.Render(ansi.Wordwrap(fmt.Sprintf("%s read in $EDITOR · %s open in browser · %s copy URL",
+			m.keys.first(ActEdit), m.keys.first(ActOpen), m.keys.first(ActYankURL)), w, "")))
 	}
 	return strings.Join(b, "\n")
 }
@@ -560,11 +560,19 @@ func (m *Model) render() string {
 			lines = m.summaryLines(m.width)
 		}
 		peek := m.compactPeek()
-		if len(lines) < l.sumH {
-			lines = append(lines, make([]string, l.sumH-len(lines))...)
+		bodyH := l.sumH
+		if len(peek) > 0 {
+			bodyH--
+		}
+		if len(lines) > bodyH {
+			lines = lines[:bodyH]
+		}
+		if len(lines) < bodyH {
+			lines = append(lines, make([]string, bodyH-len(lines))...)
 		}
 		if len(peek) > 0 {
-			copy(lines[len(lines)-len(peek):], peek) // overlay the summary, not the result list
+			copy(lines[len(lines)-len(peek):], peek)
+			lines = append(lines, m.st.border.Render(strings.Repeat("─", max(m.width, 1))))
 		}
 		parts = append(parts, strings.Join(lines, "\n"))
 	}
@@ -717,11 +725,11 @@ func (m *Model) statusHints() [][2]string {
 		}
 		return [][2]string{{"enter", "search"}, {"esc", "normal"}, {"tab", "engines"}, {"ctrl+e", "editor"}, {"↑↓", "history"}, {"ctrl+c", "quit"}}
 	case modeDetail:
-		return append([][2]string{{m.keys.first(ActBack), "back"}, {"enter", "open"}}, m.keys.hints(ActEdit, ActSummarizePage, ActYankURL, ActYankSnippet, ActHelp)...)
+		return append([][2]string{{m.keys.first(ActBack), "back"}}, m.keys.hints(ActOpen, ActEdit, ActYankURL, ActYankSnippet, ActHelp)...)
 	case modeHelp:
 		return [][2]string{{m.keys.first(ActBack), "close"}, {"j/k", "scroll"}}
 	}
-	hs := m.keys.hints(ActSearch, ActDetails, ActOpen, ActYankURL, ActYankSnippet, ActEdit, ActSummarizePage)
+	hs := m.keys.hints(ActSearch, ActDetails, ActOpen, ActYankURL, ActYankSnippet, ActEdit)
 	if k := m.keys.first(ActWindow); k != "" {
 		label := "split"
 		if m.multi {
@@ -729,7 +737,7 @@ func (m *Model) statusHints() [][2]string {
 		}
 		hs = append(hs, [2]string{k, label})
 	}
-	return append(hs, m.keys.hints(ActNextPage, ActNextEngine, ActCycleType, ActHelp, ActQuit)...)
+	return append(hs, m.keys.hints(ActNextPage, ActPrevPage, ActNextEngine, ActCycleType, ActHelp, ActQuit)...)
 }
 
 func (m *Model) renderHints(hs [][2]string, avail int) string {

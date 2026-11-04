@@ -67,6 +67,26 @@ func TestCompactPeekAndFullDetail(t *testing.T) {
 	}
 }
 
+func TestPeekSeparatedAndPinnedWhenScrolling(t *testing.T) {
+	r := testRoot(t, 40, 12)
+	r.focus.setResults(manyResults(20))
+	r.layout()
+	initial := stripANSI(r.View())
+	if !strings.Contains(initial, "────────") {
+		t.Fatalf("summary/peek needs a clear divider: %q (layout %+v)", initial, r.focus.layout())
+	}
+	for i := 0; i < 8; i++ {
+		rkey(r, "j")
+	}
+	out := stripANSI(r.View())
+	if !strings.Contains(out, "[9] example.com/") {
+		t.Errorf("selected result peek disappeared while scrolling: %q", out)
+	}
+	if !strings.Contains(out, "────────") {
+		t.Error("divider should stay visible while scrolling")
+	}
+}
+
 func TestRootTinySizes(t *testing.T) {
 	for _, size := range [][2]int{{1, 1}, {10, 3}, {20, 5}, {40, 8}} {
 		r := testRoot(t, size[0], size[1])

@@ -9,6 +9,7 @@ import (
 	"github.com/heywoodlh/tui-search/internal/app"
 	"github.com/heywoodlh/tui-search/internal/config"
 	"github.com/heywoodlh/tui-search/internal/engine"
+	"github.com/muesli/termenv"
 )
 
 func testRoot(t *testing.T, w, h int) *Root {
@@ -42,6 +43,59 @@ func rkey(r *Root, keys ...string) {
 			msg = tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune(k)}
 		}
 		r.Update(msg)
+	}
+}
+
+func TestNextAndPreviousPageKeys(t *testing.T) {
+	r := testRoot(t, 80, 24)
+	rkey(r, "n")
+	if got := r.focus.plan.Query.Page; got != 2 {
+		t.Errorf("n: page = %d, want 2; pending=%v", got, r.focus.pending)
+	}
+	rkey(r, "p")
+	if got := r.focus.plan.Query.Page; got != 1 {
+		t.Errorf("p: page = %d, want 1; pending=%v", got, r.focus.pending)
+	}
+}
+
+func TestEmptyClonedPaneStartsNormal(t *testing.T) {
+	a, err := app.New(config.Default())
+	if err != nil {
+		t.Fatal(err)
+	}
+	r := NewRoot(a, "", app.PlanOptions{})
+	r.Update(tea.WindowSizeMsg{Width: 100, Height: 30})
+	r.split(splitSideBySide)
+	if r.focus.mode != modeNormal || r.focus.input.Focused() {
+		t.Errorf("empty cloned pane should be normal, mode=%d focused=%v", r.focus.mode, r.focus.input.Focused())
+	}
+}
+
+func TestFocusedPaneOwnsHighlightedBorder(t *testing.T) {
+	lipgloss.SetColorProfile(termenv.TrueColor)
+	defer lipgloss.SetColorProfile(termenv.Ascii)
+	r := testRoot(t, 100, 30)
+	rkey(r, "ctrl+w", "v")
+	left, right := r.panes()[0], r.focus
+	if left.mode != modeNormal || right.mode != modeNormal || right.input.Focused() {
+		t.Fatal("splitting must not enter insert mode")
+	}
+	leftFrame := strings.Split(stripANSI(r.render(r.leaf(left))), "\n")
+	rightFrame := strings.Split(stripANSI(r.render(r.leaf(right))), "\n")
+	if !strings.HasPrefix(leftFrame[0], "┌") || !strings.HasSuffix(leftFrame[0], "┐") ||
+		!strings.HasPrefix(rightFrame[0], "┌") || !strings.HasSuffix(rightFrame[0], "┐") ||
+		!strings.HasPrefix(rightFrame[1], "│") || !strings.HasSuffix(rightFrame[1], "│") ||
+		!strings.HasPrefix(rightFrame[len(rightFrame)-1], "└") {
+		t.Fatalf("pane borders are incomplete: left=%q right=%q", leftFrame[0], rightFrame[0])
+	}
+	if right.st.bar.Render("┌") == left.st.border.Render("┌") ||
+		strings.Split(r.render(r.leaf(right)), "\n")[0] != right.st.bar.Render("┌"+strings.Repeat("─", r.rects[right].w-2)+"┐") ||
+		strings.Split(r.render(r.leaf(left)), "\n")[0] != left.st.border.Render("┌"+strings.Repeat("─", r.rects[left].w-2)+"┐") {
+		t.Error("focused pane border must use accent, inactive pane border muted")
+	}
+	rkey(r, "ctrl+w", "h")
+	if strings.Split(r.render(r.leaf(left)), "\n")[0] != left.st.bar.Render("┌"+strings.Repeat("─", r.rects[left].w-2)+"┐") {
+		t.Error("highlight did not follow focus to left pane")
 	}
 }
 

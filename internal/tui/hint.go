@@ -101,10 +101,7 @@ func (m *Model) hintKey(msg tea.KeyMsg) tea.Cmd {
 		if open {
 			return m.openURL(m.results[idx].URL)
 		}
-		m.mode = modeDetail
-		m.refreshDetail()
-		m.detail.GotoTop()
-		return nil
+		return m.showDetails()
 	}
 	for l := range m.hint.labels {
 		if strings.HasPrefix(l, m.hint.typed) {

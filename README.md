@@ -38,19 +38,20 @@ search -E                                # write the query in $EDITOR
   `$EDITOR` at the matching line.
 - **Summaries on your device:** extractive multi-document summarisation that
   finds the consensus across results and removes redundant sentences. It uses
-  no model and no network, and runs in milliseconds on weak hardware. `s`
-  fetches a result page and summarises it, with readable text extraction. You
-  can optionally pipe results to a local LLM (`summary.command = "ollama run
-  llama3.2:1b"`).
+  no model and no network, and runs in milliseconds on weak hardware. Opening
+  a web result's details automatically fetches and summarises its page, with
+  readable text extraction. You can optionally pipe results to a local LLM
+  (`summary.command = "ollama run llama3.2:1b"`).
 - **`$EDITOR` integration:** compose queries in a temporary Markdown file
   (`ctrl+e`, `search -E`). View the whole result set (`E`, `--edit`) or a
   fetched page as Markdown (`e`), or open source files (`e` on code results).
 - **Navigation:** vim keys, arrow keys and the mouse (wheel, click, click
   again for details). All keybindings can be changed, and a status bar shows
   hints that fit the terminal width.
-- **Responsive layout:** a compact selected-result peek overlays the summary
-  instead of reserving an empty preview pane; open the full-width page view
-  on demand. It reflows live on phones, tablets and wide terminals.
+- **Responsive layout:** a compact selected-result peek stays pinned above
+  the scrolling list, with a divider separating it from results. Opening a
+  result shows the full-width page view on demand; it reflows on phones,
+  tablets and wide terminals.
 - **Credentials:** set them literally or with `*_env`, `*_file` or
   `*_command` (works with `pass`, `op`, `gh auth token`, agenix, sops-nix and
   so on).
@@ -182,19 +183,18 @@ result numbers fail rather than printing an empty value.
 | Keys | Action |
 | --- | --- |
 | `/`, `i`, `ctrl+l` | jump to the search bar to edit the query (like a browser URL bar) |
-| `enter`, `l`, `→`, `space` | result details (in the details view, `enter` opens the browser) |
+| `enter`, `l`, `→`, `space` | show details; web pages are fetched and summarised automatically |
 | `j`/`k`, `↓`/`↑` | move down/up, or scroll |
 | `gg`/`G`, `home`/`end` | first/last result; with a count (`5G`, `5gg`), result N |
 | `ctrl+d`/`ctrl+u`, `pgdn`/`pgup` | page down/up |
 | `esc` | in the search bar: back to normal mode only. In normal mode: back one level, details → results → start page |
 | `h`, `←` | close the details view |
-| `o` / `O` | open the result / the engine's search page in the browser |
+| `o` / `O` | open the selected URL / the engine's search page in the browser (`o` also works in VIEW) |
 | `y` / `Y` / `M` | copy the URL / snippet or code / Markdown link |
 | `e` | open the result in `$EDITOR` (page as Markdown, or the full code file at the matching line) |
 | `E` | open all results (with summary) as Markdown in `$EDITOR` |
-| `s` | fetch and summarise the result's page |
 | `S` | toggle the results summary |
-| `n`/`N`, `]`/`[` | next/previous results page |
+| `n`/`p`, `]`/`[` | next/previous results page (`N` also goes back) |
 | `tab` / `shift+tab` | engine picker dropdown (see below) |
 | `t` | cycle search type (web → code → repos → issues) |
 | `ctrl+e`, `c` | compose the query in `$EDITOR` |
@@ -211,7 +211,9 @@ In insert mode, `enter` searches, `esc` returns to the results, `tab`
 completes a `!bang` (or opens the engine picker), `↑`/`↓` move through
 history and `ctrl+e` opens `$EDITOR`. New panes and tabs start in normal mode;
 press `/` to edit their queries. The active mode appears once at the bottom
-left of the whole application, while each pane has a focus-highlighted status.
+left of the whole application; the focused pane's full border is highlighted.
+Bing sometimes serves the same HTML results for a requested next page; the
+TUI reports this rather than relabeling repeated results as a new page.
 
 Result and fetched-page links are numbered `[1]`, `[2]`, … in the TUI.
 `:open-link 2` opens a link in the browser and `:copy-link 2` copies it;
@@ -433,7 +435,9 @@ it takes precedence in `auto`, `command` and `tmux` modes.
 
 ## Themes
 
-Set `ui.theme` (or pass `--theme`). `search --list-themes` prints every theme
+Set `ui.theme` (or pass `--theme`). In the TUI, `:theme NAME` changes the
+palette for the current session only; Tab completes built-in names and the
+config file is not edited. `search --list-themes` prints every theme
 with a colour preview:
 
 `default`, `ansi` (uses your terminal's 16 colours, so it matches whatever

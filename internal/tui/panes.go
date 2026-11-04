@@ -151,8 +151,16 @@ func (r *Root) layout() {
 		p.focused = p == r.focus
 		p.multi = multi
 		p.windowPending = r.pending && p == r.focus
-		p.Update(tea.WindowSizeMsg{Width: rc.w, Height: rc.h})
+		w, h := rc.w, rc.h
+		if r.framed(rc) {
+			w, h = w-2, h-2
+		}
+		p.Update(tea.WindowSizeMsg{Width: w, Height: h})
 	}
+}
+
+func (r *Root) framed(rc rect) bool {
+	return len(r.rects) > 1 && rc.w >= 4 && rc.h >= 4
 }
 
 func (r *Root) place(n *node, rc rect) {
@@ -321,10 +329,8 @@ func (r *Root) clone(src *Model) *Model {
 	for k, v := range src.pages {
 		p.pages[k] = v
 	}
-	if len(p.results) > 0 || p.plan.Engine != nil {
-		p.mode = modeNormal
-		p.input.Blur()
-	}
+	p.mode = modeNormal
+	p.input.Blur()
 	return p
 }
 
@@ -688,6 +694,13 @@ func (r *Root) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				}
 				local := msg
 				local.X, local.Y = msg.X-rc.x, msg.Y-rc.y
+				if r.framed(rc) {
+					local.X--
+					local.Y--
+					if local.X < 0 || local.Y < 0 || local.X >= p.width || local.Y >= p.height {
+						return r, nil // border click only changes focus
+					}
+				}
 				return r, r.forward(p, local)
 			}
 		}
@@ -813,7 +826,21 @@ func (r *Root) View() string {
 func (r *Root) render(n *node) string {
 	if n.pane != nil {
 		rc := r.rects[n.pane]
-		return lipgloss.NewStyle().Width(rc.w).MaxWidth(rc.w).Height(rc.h).MaxHeight(rc.h).Render(n.pane.View())
+		content := lipgloss.NewStyle().Width(n.pane.width).MaxWidth(n.pane.width).Height(n.pane.height).MaxHeight(n.pane.height).Render(n.pane.View())
+		if !r.framed(rc) {
+			return content
+		}
+		style := n.pane.st.border
+		if n.pane == r.focus {
+			style = n.pane.st.bar
+		}
+		top := style.Render("┌" + strings.Repeat("─", rc.w-2) + "┐")
+		bottom := style.Render("└" + strings.Repeat("─", rc.w-2) + "┘")
+		lines := []string{top}
+		for _, line := range strings.Split(content, "\n") {
+			lines = append(lines, style.Render("│")+line+style.Render("│"))
+		}
+		return strings.Join(append(lines, bottom), "\n")
 	}
 	parts := make([]string, 0, 2*len(n.children))
 	for i, c := range n.children {

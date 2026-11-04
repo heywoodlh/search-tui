@@ -80,6 +80,78 @@ func TestRenderAllSizes(t *testing.T) {
 	}
 }
 
+func TestOpeningDetailsStartsPageFetch(t *testing.T) {
+	m := testModel(t)
+	m.results = []engine.Result{{Title: "Article", URL: "https://example.com/article"}}
+	m.mode = modeNormal
+	_, cmd := m.Update(kp("enter"))
+	if m.mode != modeDetail || cmd == nil || m.busy != "fetching page…" {
+		t.Fatalf("details should start page fetch: mode=%d cmd=%v busy=%q", m.mode, cmd != nil, m.busy)
+	}
+	m.busy = ""
+	if strings.Contains(m.detailContent(m.results[0], 50), "fetch & summarise") {
+		t.Error("VIEW still advertises manual fetch")
+	}
+}
+
+func TestOpeningAnotherResultWhileFetchPending(t *testing.T) {
+	m := testModel(t)
+	m.results = []engine.Result{{Title: "A", URL: "https://example.com/a"}, {Title: "B", URL: "https://example.com/b"}}
+	m.mode = modeNormal
+	m.Update(kp("enter"))
+	m.Update(kp("esc"))
+	m.Update(kp("j"))
+	_, cmd := m.Update(kp("enter"))
+	if cmd == nil || m.mode != modeDetail {
+		t.Error("selecting another result should start its own page fetch")
+	}
+	m.Update(pageMsg{pid: m.pid, url: "https://example.com/a", page: app.Page{}})
+	if m.busy == "" {
+		t.Error("the first page finishing must not clear the second page's activity")
+	}
+}
+
+func TestViewOpensURLWithOOnly(t *testing.T) {
+	m := testModel(t)
+	m.results = []engine.Result{{Title: "Article", URL: "https://example.com/article"}}
+	m.app.Cfg.Browser = "true"
+	m.mode = modeDetail
+	_, cmd := m.Update(kp("enter"))
+	if cmd != nil || m.flash != "" {
+		t.Error("Enter in VIEW must not open the browser")
+	}
+	_, cmd = m.Update(kp("o"))
+	if cmd == nil || !strings.Contains(m.flash, "opened") {
+		t.Errorf("o in VIEW should open URL; flash=%q, cmd=%v, err=%v", m.flash, cmd != nil, m.err)
+	}
+}
+
+func TestCodeDetailsDoNotFetchPage(t *testing.T) {
+	m := testModel(t)
+	m.results = []engine.Result{{Title: "Code", URL: "https://example.com/code", Code: &engine.CodeMatch{}}}
+	m.mode = modeNormal
+	_, cmd := m.Update(kp("enter"))
+	if m.mode != modeDetail || cmd != nil || m.busy != "" {
+		t.Fatalf("code details should not fetch web page: mode=%d cmd=%v busy=%q", m.mode, cmd != nil, m.busy)
+	}
+}
+
+func TestRepeatedBingPageDoesNotMasqueradeAsNextPage(t *testing.T) {
+	m := testModel(t)
+	plan, err := m.app.Plan("example", app.PlanOptions{Engine: "bing", Page: 1})
+	if err != nil {
+		t.Fatal(err)
+	}
+	m.plan = plan
+	m.setResults([]engine.Result{{Title: "same", URL: "https://example.com/a"}})
+	m.Update(kp("n"))
+	next := m.plan
+	m.Update(resultsMsg{pid: m.pid, id: m.searchID, plan: next, results: []engine.Result{{Title: "same", URL: "https://example.com/a"}}})
+	if m.plan.Query.Page != 1 || m.err == nil || !strings.Contains(m.err.Error(), "same results") {
+		t.Errorf("should report Bing ignoring pagination, not show page 2: page=%d err=%v", m.plan.Query.Page, m.err)
+	}
+}
+
 func TestNavigation(t *testing.T) {
 	m := testModel(t)
 	send(m, tea.WindowSizeMsg{Width: 80, Height: 24})

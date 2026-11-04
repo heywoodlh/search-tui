@@ -78,6 +78,23 @@ func TestCommandModifiersAndNew(t *testing.T) {
 	}
 }
 
+func TestThemeCompletionIsSessionOnly(t *testing.T) {
+	r := testRoot(t, 100, 25)
+	original := r.app.Cfg.UI.Theme
+	typeKeys(r, ":theme drac")
+	special(r, tea.KeyTab)
+	if got := r.cmd.input.Value(); got != "theme dracula" {
+		t.Fatalf("theme completion: %q", got)
+	}
+	special(r, tea.KeyEnter)
+	if r.app.Cfg.UI.Theme != "dracula" || r.focus.err != nil {
+		t.Errorf("theme did not change for session: %q, %v", r.app.Cfg.UI.Theme, r.focus.err)
+	}
+	if original == r.app.Cfg.UI.Theme {
+		t.Error("theme did not change")
+	}
+}
+
 func TestTabs(t *testing.T) {
 	r := testRoot(t, 120, 30)
 	ex(r, "tabnew")
