@@ -1,0 +1,97 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>search: install</title>
+<meta name="description" content="Install search with Nix, home-manager, Go or prebuilt binaries.">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'self'; img-src 'self'; media-src 'self'; base-uri 'none'; form-action 'none'">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<link rel="icon" href="../icon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="../style.css">
+</head>
+<body>
+<nav>
+<a class="logo" href="../" aria-label="search: home"><img src="../icon.svg" alt="search" width="36" height="36"></a>
+<a href="../install/" aria-current="page">install</a>
+<a href="../docs/">docs</a>
+<a href="https://github.com/heywoodlh/search-tui">github</a>
+</nav>
+<main><h1>Install</h1>
+
+<h2>Nix</h2>
+
+Run it once:
+
+<pre>    nix run github:heywoodlh/search-tui -- "hello world"</pre>
+
+Install into your profile:
+
+<pre>    nix profile install github:heywoodlh/search-tui</pre>
+
+Or add the flake as an input. It provides packages for x86_64-linux, aarch64-linux and aarch64-darwin, plus overlays.default.
+
+<h2>home-manager</h2>
+
+<pre>    {
+      inputs.search-tui.url = "github:heywoodlh/search-tui";
+
+      # in your home-manager configuration:
+      imports = [ inputs.search-tui.homeManagerModules.default ];
+
+      programs.search-tui = {
+        enable = true;
+        settings = {
+          default_engine = "duckduckgo";
+          browser = "firefox";
+          ui.theme = "catppuccin-mocha";
+          keys.open = [ "o" "enter" ];
+          engines.github.token_command = "gh auth token";
+          engines.kagi.token_file = "~/.config/kagi/session-token";
+        };
+      };
+    }</pre>
+
+settings takes every key of the TOML config and writes ~/.config/search-tui/config.toml. Keep secrets out of it (they would land in the Nix store): use *_file, *_command or *_env instead.
+
+<h2>Go</h2>
+
+<pre>    go install github.com/heywoodlh/search-tui/cmd/search@latest</pre>
+
+Needs Go 1.25 or newer. The binary is called search.
+
+<h2>Prebuilt binaries</h2>
+
+Every <a href="https://github.com/heywoodlh/search-tui/releases">release</a> includes these binaries and a SHA256SUMS file:
+
+<pre>    Linux     amd64 arm64 armv6 riscv64   static, any distribution
+    FreeBSD   amd64 arm64                 static
+    NetBSD    amd64 arm64                 static
+    OpenBSD   amd64 arm64                 base-system libc only
+    macOS     arm64
+    Windows   amd64 arm64                 .exe</pre>
+
+OpenBSD requires system calls to go through its libc, so that build links the base-system libc, which every install has. Download a binary, make it executable and put it on your PATH:
+
+<pre>    curl -LO https://github.com/heywoodlh/search-tui/releases/latest/download/search-linux-amd64
+    chmod +x search-linux-amd64 && mv search-linux-amd64 ~/.local/bin/search</pre>
+
+<h2>Windows</h2>
+
+Use search-windows-amd64.exe (or arm64) in Windows Terminal. The config file lives at %AppData%\search-tui\config.toml.
+
+<h2>From source</h2>
+
+<pre>    git clone https://github.com/heywoodlh/search-tui
+    cd search-tui
+    go build -o search ./cmd/search     # or: nix build</pre>
+
+<h2>Next</h2>
+
+Run search with no arguments, press ? for help, or read the <a href="../docs/">docs</a>.</main>
+<footer>
+search is free software under the <a href="https://github.com/heywoodlh/search-tui/blob/main/LICENSE">GPL-3.0</a>.
+This site is plain text: <a href="../install.txt">install.txt</a> or curl https://heywoodlh.github.io/search-tui/install/
+</footer>
+</body>
+</html>
