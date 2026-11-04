@@ -41,8 +41,10 @@ Show
 # 2. The TUI.
 Type "search"
 Enter
-Wait+Screen /type a query/
+Wait+Screen /to type a query/
 Sleep 800ms
+Type "/"
+Sleep 300ms
 Type "rust borrow checker !so"
 Sleep 400ms
 Enter
