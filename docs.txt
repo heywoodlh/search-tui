@@ -122,6 +122,24 @@ Engines that need configuration are hidden until it is set; their bangs open the
     [engines.github]
     token_command = "gh auth token"
 
+Or skip the config file entirely: in the TUI, :login {provider} saves credentials in one JSON file (~/.config/search-tui/auth.json, mode 0600, $SEARCH_TUI_AUTH to override) and newly configured engines appear immediately. The argument is required and tab completes provider names.
+
+    :login kagi      Search API key or Session Link. A Session Link uses your
+                     Kagi plan at no extra cost (unofficial HTML interface,
+                     possibly bot-challenged); an API key uses the billed v1
+                     Search API (~$12/1000). The kind is auto-detected.
+    :login github    OAuth device flow: a code is shown, github.com/login/device
+                     opens, and the token (repo, read:org, gist scopes) is
+                     polled in the background. Uses the GitHub CLI's public
+                     OAuth app; SEARCH_TUI_GITHUB_CLIENT_ID overrides it.
+    :login google    API key, then the Programmable Search engine ID (cx).
+    :login brave     API key (free tier needs a card on file).
+    :login mojeek    API key (paid; the HTML endpoint is captcha'd).
+    :login gitlab    personal access token with read_api; set
+                     [engines.gitlab] base_url first for self-hosted.
+
+Explicit config wins: a literal value, *_env, *_file or *_command in config.toml is tried before auth.json. :help login lists the same notes in the TUI.
+
 Custom engines: type = "url" | "json" | "html", or another instance of a built-in type (gitlab, github, searxng, sourcegraph, gitea):
 
     [engines.work]
