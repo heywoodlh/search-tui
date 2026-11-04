@@ -4,6 +4,7 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 )
@@ -31,8 +32,11 @@ func TestAuthRoundTrip(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if perm := st.Mode().Perm(); perm != 0o600 {
-		t.Errorf("auth file mode = %o, want 600", perm)
+	// Windows has no POSIX permission bits: Chmod(0600) leaves 0666 there.
+	if runtime.GOOS != "windows" {
+		if perm := st.Mode().Perm(); perm != 0o600 {
+			t.Errorf("auth file mode = %o, want 600", perm)
+		}
 	}
 	b, err := LoadAuth()
 	if err != nil {
