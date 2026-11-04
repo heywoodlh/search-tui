@@ -15,7 +15,7 @@
 <a class="logo" href="../" aria-label="search: home"><img src="../icon.svg" alt="search" width="36" height="36"></a>
 <a href="../install/" aria-current="page">install</a>
 <a href="../docs/">docs</a>
-<a href="https://github.com/heywoodlh/tui-search">github</a>
+<a href="https://github.com/heywoodlh/search-tui">github</a>
 </nav>
 <main><h1>Install</h1>
 
@@ -23,23 +23,23 @@
 
 Run it once:
 
-<pre>    nix run github:heywoodlh/tui-search -- "hello world"</pre>
+<pre>    nix run github:heywoodlh/search-tui -- "hello world"</pre>
 
 Install into your profile:
 
-<pre>    nix profile install github:heywoodlh/tui-search</pre>
+<pre>    nix profile install github:heywoodlh/search-tui</pre>
 
 Or add the flake as an input. It provides packages for x86_64-linux, aarch64-linux and aarch64-darwin, plus overlays.default.
 
 <h2>home-manager</h2>
 
 <pre>    {
-      inputs.tui-search.url = "github:heywoodlh/tui-search";
+      inputs.search-tui.url = "github:heywoodlh/search-tui";
 
       # in your home-manager configuration:
-      imports = [ inputs.tui-search.homeManagerModules.default ];
+      imports = [ inputs.search-tui.homeManagerModules.default ];
 
-      programs.tui-search = {
+      programs.search-tui = {
         enable = true;
         settings = {
           default_engine = "duckduckgo";
@@ -52,17 +52,17 @@ Or add the flake as an input. It provides packages for x86_64-linux, aarch64-lin
       };
     }</pre>
 
-settings takes every key of the TOML config and writes ~/.config/tui-search/config.toml. Keep secrets out of it (they would land in the Nix store): use *_file, *_command or *_env instead.
+settings takes every key of the TOML config and writes ~/.config/search-tui/config.toml. Keep secrets out of it (they would land in the Nix store): use *_file, *_command or *_env instead.
 
 <h2>Go</h2>
 
-<pre>    go install github.com/heywoodlh/tui-search/cmd/search@latest</pre>
+<pre>    go install github.com/heywoodlh/search-tui/cmd/search@latest</pre>
 
 Needs Go 1.25 or newer. The binary is called search.
 
 <h2>Prebuilt binaries</h2>
 
-Every <a href="https://github.com/heywoodlh/tui-search/releases">release</a> includes these binaries and a SHA256SUMS file:
+Every <a href="https://github.com/heywoodlh/search-tui/releases">release</a> includes these binaries and a SHA256SUMS file:
 
 <pre>    Linux     amd64 arm64 armv6 riscv64   static, any distribution
     FreeBSD   amd64 arm64                 static
@@ -73,25 +73,25 @@ Every <a href="https://github.com/heywoodlh/tui-search/releases">release</a> inc
 
 OpenBSD requires system calls to go through its libc, so that build links the base-system libc, which every install has. Download a binary, make it executable and put it on your PATH:
 
-<pre>    curl -LO https://github.com/heywoodlh/tui-search/releases/latest/download/search-linux-amd64
+<pre>    curl -LO https://github.com/heywoodlh/search-tui/releases/latest/download/search-linux-amd64
     chmod +x search-linux-amd64 && mv search-linux-amd64 ~/.local/bin/search</pre>
 
 <h2>Windows</h2>
 
-Use search-windows-amd64.exe (or arm64) in Windows Terminal. The config file lives at %AppData%\tui-search\config.toml.
+Use search-windows-amd64.exe (or arm64) in Windows Terminal. The config file lives at %AppData%\search-tui\config.toml.
 
 <h2>From source</h2>
 
-<pre>    git clone https://github.com/heywoodlh/tui-search
-    cd tui-search
+<pre>    git clone https://github.com/heywoodlh/search-tui
+    cd search-tui
     go build -o search ./cmd/search     # or: nix build</pre>
 
 <h2>Next</h2>
 
 Run search with no arguments, press ? for help, or read the <a href="../docs/">docs</a>.</main>
 <footer>
-search is free software under the <a href="https://github.com/heywoodlh/tui-search/blob/main/LICENSE">GPL-3.0</a>.
-This site is plain text: <a href="../install.txt">install.txt</a> or curl https://heywoodlh.github.io/tui-search/pr-preview/pr-1/install/
+search is free software under the <a href="https://github.com/heywoodlh/search-tui/blob/main/LICENSE">GPL-3.0</a>.
+This site is plain text: <a href="../install.txt">install.txt</a> or curl https://heywoodlh.github.io/search-tui/pr-preview/pr-1/install/
 </footer>
 </body>
 </html>

@@ -4,23 +4,23 @@ Nix
 
 Run it once:
 
-    nix run github:heywoodlh/tui-search -- "hello world"
+    nix run github:heywoodlh/search-tui -- "hello world"
 
 Install into your profile:
 
-    nix profile install github:heywoodlh/tui-search
+    nix profile install github:heywoodlh/search-tui
 
 Or add the flake as an input. It provides packages for x86_64-linux, aarch64-linux and aarch64-darwin, plus overlays.default.
 
 home-manager
 
     {
-      inputs.tui-search.url = "github:heywoodlh/tui-search";
+      inputs.search-tui.url = "github:heywoodlh/search-tui";
 
       # in your home-manager configuration:
-      imports = [ inputs.tui-search.homeManagerModules.default ];
+      imports = [ inputs.search-tui.homeManagerModules.default ];
 
-      programs.tui-search = {
+      programs.search-tui = {
         enable = true;
         settings = {
           default_engine = "duckduckgo";
@@ -33,11 +33,11 @@ home-manager
       };
     }
 
-settings takes every key of the TOML config and writes ~/.config/tui-search/config.toml. Keep secrets out of it (they would land in the Nix store): use *_file, *_command or *_env instead.
+settings takes every key of the TOML config and writes ~/.config/search-tui/config.toml. Keep secrets out of it (they would land in the Nix store): use *_file, *_command or *_env instead.
 
 Go
 
-    go install github.com/heywoodlh/tui-search/cmd/search@latest
+    go install github.com/heywoodlh/search-tui/cmd/search@latest
 
 Needs Go 1.25 or newer. The binary is called search.
 
@@ -54,17 +54,17 @@ Every release includes these binaries and a SHA256SUMS file:
 
 OpenBSD requires system calls to go through its libc, so that build links the base-system libc, which every install has. Download a binary, make it executable and put it on your PATH:
 
-    curl -LO https://github.com/heywoodlh/tui-search/releases/latest/download/search-linux-amd64
+    curl -LO https://github.com/heywoodlh/search-tui/releases/latest/download/search-linux-amd64
     chmod +x search-linux-amd64 && mv search-linux-amd64 ~/.local/bin/search
 
 Windows
 
-Use search-windows-amd64.exe (or arm64) in Windows Terminal. The config file lives at %AppData%\tui-search\config.toml.
+Use search-windows-amd64.exe (or arm64) in Windows Terminal. The config file lives at %AppData%\search-tui\config.toml.
 
 From source
 
-    git clone https://github.com/heywoodlh/tui-search
-    cd tui-search
+    git clone https://github.com/heywoodlh/search-tui
+    cd search-tui
     go build -o search ./cmd/search     # or: nix build
 
 Next

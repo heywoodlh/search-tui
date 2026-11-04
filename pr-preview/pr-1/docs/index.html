@@ -15,7 +15,7 @@
 <a class="logo" href="../" aria-label="search: home"><img src="../icon.svg" alt="search" width="36" height="36"></a>
 <a href="../install/">install</a>
 <a href="../docs/" aria-current="page">docs</a>
-<a href="https://github.com/heywoodlh/tui-search">github</a>
+<a href="https://github.com/heywoodlh/search-tui">github</a>
 </nav>
 <main><h1>Docs</h1>
 
@@ -24,7 +24,7 @@
     3. Bangs            7. Browser and $EDITOR
     4. Engines          8. Summaries and low power</pre>
 
-The <a href="https://github.com/heywoodlh/tui-search#readme">README</a> has the full reference.
+The <a href="https://github.com/heywoodlh/search-tui#readme">README</a> has the full reference.
 
 <h2>1. Usage</h2>
 
@@ -151,7 +151,7 @@ Custom engines: type = "url" | "json" | "html", or another instance of a built-i
 
 <h2>5. Configuration</h2>
 
-~/.config/tui-search/config.toml ($XDG_CONFIG_HOME is honoured; on Windows %AppData%\tui-search). search --example-config prints a fully commented example.
+~/.config/search-tui/config.toml ($XDG_CONFIG_HOME is honoured; on Windows %AppData%\search-tui). search --example-config prints a fully commented example.
 
 <pre>    default_engine = "duckduckgo"
     default_code_engine = "github"
@@ -185,15 +185,15 @@ $EDITOR (or editor = "...") is used for composing queries in a temporary Markdow
 
 <h2>8. Summaries and low power</h2>
 
-Summaries are extractive and computed on your device: sentences that agree with the rest of the results and match the query, without repeats. s fetches a page and summarises it. For an abstractive summary, pipe results to a local model:
+Summaries are extractive and computed on your device: sentences that agree with the rest of the results and match the query, without repeats. Opening a web result's details fetches and summarises that page automatically. For an abstractive summary, pipe results to a local model:
 
 <pre>    [summary]
     command = "ollama run llama3.2:1b"</pre>
 
 low_power = true uses fewer results, smaller download caps and no animations, for very small machines.</main>
 <footer>
-search is free software under the <a href="https://github.com/heywoodlh/tui-search/blob/main/LICENSE">GPL-3.0</a>.
-This site is plain text: <a href="../docs.txt">docs.txt</a> or curl https://heywoodlh.github.io/tui-search/pr-preview/pr-1/docs/
+search is free software under the <a href="https://github.com/heywoodlh/search-tui/blob/main/LICENSE">GPL-3.0</a>.
+This site is plain text: <a href="../docs.txt">docs.txt</a> or curl https://heywoodlh.github.io/search-tui/pr-preview/pr-1/docs/
 </footer>
 </body>
 </html>

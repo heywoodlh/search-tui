@@ -15,18 +15,18 @@
 <a class="logo" href="./" aria-label="search: home"><img src="./icon.svg" alt="search" width="36" height="36"></a>
 <a href="./install/">install</a>
 <a href="./docs/">docs</a>
-<a href="https://github.com/heywoodlh/tui-search">github</a>
+<a href="https://github.com/heywoodlh/search-tui">github</a>
 </nav>
 <main><h1>search</h1>: web and code search in your terminal.
 
 A fast TUI and CLI for DuckDuckGo, Google, Bing, Kagi, Brave, GitHub, Sourcegraph and more, with DuckDuckGo-style !bangs, copyable code snippets and summaries computed on your own device. One small static binary for Linux, macOS and Windows, from a Raspberry Pi to a 4K monitor.
 
-(demo recording unavailable for this build)
+<img class="demo" src="demo.png" alt="search TUI showing Stack Overflow results and an on-device summary for rust borrow checker" width="1200" height="720">
 <a href="demo.mp4">demo video</a>
 
 <h2>Try it</h2>
 
-<pre>    nix run github:heywoodlh/tui-search -- "nixos flakes tutorial"
+<pre>    nix run github:heywoodlh/search-tui -- "nixos flakes tutorial"
 
     search                               # open the TUI
     search "rust lifetimes"              # results + summary, inline
@@ -48,7 +48,7 @@ Single-quote queries containing ! in bash and zsh (history expansion).
 
 - TUI: Vim keys, arrows and mouse; configurable keybindings; a status bar with hints; Esc always goes back; Tab opens an engine picker; Ctrl+L jumps to the search bar; ctrl+w splits panes like vim to compare engines side by side.
 
-- Layouts: Split preview on wide screens, stacked on phones, tablets and tmux panes; reflows live on resize.
+- Layouts: A pinned result peek above the scrolling list and full-width details on demand; reflows live on phones, tablets and wide screens.
 
 - Themes: Catppuccin, Dracula, Nord, Gruvbox, Solarized, Tokyo Night and more, foreground-only: your terminal background stays.
 
@@ -56,10 +56,10 @@ Single-quote queries containing ! in bash and zsh (history expansion).
 
 - Small: Static Go binary, capped downloads, low_power mode.
 
-<a href="install/">Install</a> · <a href="docs/">Docs</a> · <a href="https://github.com/heywoodlh/tui-search">Source</a></main>
+<a href="install/">Install</a> · <a href="docs/">Docs</a> · <a href="https://github.com/heywoodlh/search-tui">Source</a></main>
 <footer>
-search is free software under the <a href="https://github.com/heywoodlh/tui-search/blob/main/LICENSE">GPL-3.0</a>.
-This site is plain text: <a href="./index.txt">index.txt</a> or curl https://heywoodlh.github.io/tui-search/pr-preview/pr-1/
+search is free software under the <a href="https://github.com/heywoodlh/search-tui/blob/main/LICENSE">GPL-3.0</a>.
+This site is plain text: <a href="./index.txt">index.txt</a> or curl https://heywoodlh.github.io/search-tui/pr-preview/pr-1/
 </footer>
 </body>
 </html>
