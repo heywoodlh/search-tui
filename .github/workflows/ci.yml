@@ -1,0 +1,114 @@
+name: CI
+
+# Every pull request must pass the `posture` job, which requires all build,
+# test, lint and security gates below. Make `posture` a required status
+# check on main (see SECURITY.md).
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions: {}
+
+concurrency:
+  group: ci-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  go:
+    name: test (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    # macOS arm64 runners are often unavailable for this account (jobs are
+    # never acquired); darwin is also validated on a local Mac.
+    continue-on-error: ${{ startsWith(matrix.os, 'macos') }}
+    timeout-minutes: 30
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+      - run: go vet ./...
+      - run: go test -race ./...
+        if: runner.os == 'Linux'
+      - run: go test ./...
+        if: runner.os != 'Linux'
+      - name: Release binaries build and are statically linked
+        if: runner.os == 'Linux'
+        run: scripts/build-release.sh "$RUNNER_TEMP/dist"
+
+  nix:
+    name: nix (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, ubuntu-24.04-arm, macos-latest]
+    runs-on: ${{ matrix.os }}
+    continue-on-error: ${{ startsWith(matrix.os, 'macos') }}
+    timeout-minutes: 60
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: cachix/install-nix-action@75c75c31ebece974e48ebc36b4ad125bd97bd97b # v31.11.3
+      - run: nix flake check -L
+
+  # Lint and security gates. Tool versions come from `nix develop .#ci`
+  # (pinned by flake.lock); the same script runs them locally.
+  gate:
+    name: ${{ matrix.check.name }}
+    strategy:
+      fail-fast: false
+      matrix:
+        check:
+          - { id: go, name: "lint: golangci-lint (gosec, staticcheck, ...)" }
+          - { id: vuln, name: "security: govulncheck" }
+          - { id: workflows, name: "security: actions (actionlint, zizmor)" }
+          - { id: shell, name: "lint: shellcheck" }
+          - { id: secrets, name: "security: gitleaks" }
+          - { id: nix, name: "lint: nixfmt" }
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          fetch-depth: 0 # gitleaks scans the full history
+      - uses: cachix/install-nix-action@75c75c31ebece974e48ebc36b4ad125bd97bd97b # v31.11.3
+      - name: Run ${{ matrix.check.id }}
+        env:
+          CHECK: ${{ matrix.check.id }}
+          # zizmor's online audits (known-vulnerable or impostor actions).
+          GH_TOKEN: ${{ github.token }}
+        run: nix develop .#ci -c scripts/check.sh "$CHECK"
+
+  posture:
+    name: posture
+    if: always()
+    needs: [go, nix, gate]
+    runs-on: ubuntu-latest
+    permissions: {}
+    steps:
+      - name: Require every gate to pass
+        env:
+          NEEDS: ${{ toJSON(needs) }}
+        run: |
+          echo "$NEEDS" | jq -r 'to_entries[] | "\(.key): \(.value.result)"'
+          failed=$(echo "$NEEDS" | jq -r '[to_entries[] | select(.value.result != "success")] | length')
+          if [ "$failed" != 0 ]; then
+            echo "::error title=Posture not met::$failed required job group(s) did not succeed."
+            exit 1
+          fi

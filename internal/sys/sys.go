@@ -1,0 +1,416 @@
+// Package sys wraps OS integrations: clipboard, browser and editor.
+package sys
+
+import (
+	"errors"
+	"fmt"
+	"io"
+	"os"
+	"os/exec"
+	"path/filepath"
+	"runtime"
+	"strings"
+
+	osc52 "github.com/aymanbagabas/go-osc52/v2"
+	"github.com/heywoodlh/search-tui/internal/safe"
+)
+
+// Copy places text on the clipboard and returns a short description of the
+// method used. mode is:
+//
+//	auto     clipboard_command if set, else a detected tool (wl-copy, xclip,
+//	         xsel, pbcopy, clip, termux-clipboard-set), else OSC 52
+//	command  only clipboard_command or a detected tool
+//	tmux     the tmux paste buffer (tmux load-buffer -w -; -w also sets the
+//	         system clipboard through tmux where supported)
+//	osc52    terminal escape sequence (works over SSH)
+//	none     disabled
+//
+// clipboard_command is run through the shell with the text on stdin, so
+// pipelines work, e.g. "tmux load-buffer -" or "xclip -selection primary".
+func Copy(text, mode, command string) (string, error) {
+	switch mode {
+	case "none", "off":
+		return "", errors.New("clipboard disabled (clipboard = \"none\")")
+	case "osc52":
+		return "osc52", copyOSC52(text)
+	case "tmux":
+		if command == "" {
+			command = "tmux load-buffer -w -"
+		}
+	}
+	if command != "" {
+		if err := shellPipe(command, text); err != nil {
+			return "", fmt.Errorf("clipboard_command %q: %w", command, err)
+		}
+		return firstWord(command), nil
+	}
+	if args := clipboardCommand(); args != nil {
+		if err := pipeTo(args, text); err == nil {
+			// Over SSH the local tool may be pointless; also emit OSC52.
+			if os.Getenv("SSH_TTY") != "" && mode == "auto" {
+				_ = copyOSC52(text)
+			}
+			return args[0], nil
+		}
+	}
+	if mode == "command" {
+		return "", errors.New("no clipboard command found (install wl-copy, xclip, xsel or set clipboard_command)")
+	}
+	return "osc52", copyOSC52(text)
+}
+
+func firstWord(s string) string {
+	if f := strings.Fields(s); len(f) > 0 {
+		return f[0]
+	}
+	return s
+}
+
+// shellPipe runs a user-configured command through the shell with text on
+// stdin.
+func shellPipe(command, text string) error {
+	var c *exec.Cmd
+	if runtime.GOOS == "windows" {
+		c = exec.Command("cmd", "/C", command) //nolint:gosec,noctx // G204: user-configured clipboard_command
+	} else {
+		c = exec.Command("sh", "-c", command) //nolint:gosec,noctx // G204: user-configured clipboard_command
+	}
+	c.Stdin = strings.NewReader(text)
+	if out, err := c.CombinedOutput(); err != nil {
+		if msg := strings.TrimSpace(string(out)); msg != "" {
+			return fmt.Errorf("%w: %s", err, safe.Line(msg))
+		}
+		return err
+	}
+	return nil
+}
+
+func clipboardCommand() []string {
+	switch runtime.GOOS {
+	case "darwin":
+		return []string{"pbcopy"}
+	case "windows":
+		return []string{"clip"}
+	}
+	cands := [][]string{}
+	if os.Getenv("WAYLAND_DISPLAY") != "" {
+		cands = append(cands, []string{"wl-copy"})
+	}
+	if os.Getenv("DISPLAY") != "" {
+		cands = append(cands, []string{"xclip", "-selection", "clipboard"}, []string{"xsel", "--clipboard", "--input"})
+	}
+	if os.Getenv("TERMUX_VERSION") != "" || os.Getenv("PREFIX") != "" && strings.Contains(os.Getenv("PREFIX"), "com.termux") {
+		cands = append(cands, []string{"termux-clipboard-set"})
+	}
+	for _, c := range cands {
+		if _, err := exec.LookPath(c[0]); err == nil {
+			return c
+		}
+	}
+	return nil
+}
+
+func pipeTo(args []string, text string) error {
+	if len(args) == 0 {
+		return errors.New("empty command")
+	}
+	c := exec.Command(args[0], args[1:]...) //nolint:gosec,noctx // G204: fixed clipboard tool or user-configured clipboard_command
+	c.Stdin = strings.NewReader(text)
+	return c.Run()
+}
+
+func copyOSC52(text string) error {
+	seq := osc52.New(text)
+	if os.Getenv("TMUX") != "" {
+		seq = seq.Tmux()
+	} else if strings.HasPrefix(os.Getenv("TERM"), "screen") {
+		seq = seq.Screen()
+	}
+	out := io.Writer(os.Stderr)
+	if tty, err := os.OpenFile("/dev/tty", os.O_WRONLY, 0); err == nil {
+		defer tty.Close()
+		out = tty
+	}
+	_, err := seq.WriteTo(out)
+	return err
+}
+
+// BrowserCommand returns the command used to open a URL.
+//
+// Precedence: configured command, then $BROWSER, then the system default.
+// configured may be "default" (or "system") to force the system default,
+// a command line (with optional %s or {url} placeholder), or on macOS and
+// Windows just an application name such as "Firefox" or "Google Chrome".
+func BrowserCommand(configured, url string) []string {
+	configured = strings.TrimSpace(configured)
+	switch strings.ToLower(configured) {
+	case "default", "system":
+		return systemBrowser(url)
+	case "":
+		configured = envBrowser()
+	}
+	if configured != "" {
+		if args := appBrowser(configured, url); args != nil {
+			return args
+		}
+		args := SplitCommand(configured)
+		replaced := false
+		for i, a := range args {
+			if strings.Contains(a, "%s") || strings.Contains(a, "{url}") {
+				args[i] = strings.NewReplacer("%s", url, "{url}", url).Replace(a)
+				replaced = true
+			}
+		}
+		if !replaced {
+			args = append(args, url)
+		}
+		return args
+	}
+	return systemBrowser(url)
+}
+
+// envBrowser returns the first usable entry of $BROWSER, which may be a
+// colon-separated list (the xdg convention).
+func envBrowser() string {
+	v := os.Getenv("BROWSER")
+	if v == "" {
+		return ""
+	}
+	sep := ":"
+	if runtime.GOOS == "windows" {
+		sep = ";"
+	}
+	for _, c := range strings.Split(v, sep) {
+		if args := SplitCommand(c); len(args) > 0 {
+			if _, err := exec.LookPath(args[0]); err == nil {
+				return c
+			}
+		}
+	}
+	return ""
+}
+
+// appBrowser maps a bare application name that is not an executable on
+// PATH to macOS's launcher ("open -a Firefox URL"). There is deliberately no
+// Windows equivalent: `cmd /c start` would parse the URL with cmd.exe, where
+// characters such as & and | are command separators, letting a crafted
+// result URL run commands. On Windows, configure the browser's path instead.
+func appBrowser(name, url string) []string {
+	if runtime.GOOS != "darwin" || strings.ContainsAny(name, "%{/\\") || strings.HasPrefix(name, "-") {
+		return nil
+	}
+	if args := SplitCommand(name); len(args) > 0 {
+		if _, err := exec.LookPath(args[0]); err == nil {
+			return nil
+		}
+	}
+	return []string{"open", "-a", name, url}
+}
+
+// systemBrowser opens url with the platform default handler.
+func systemBrowser(url string) []string {
+	switch runtime.GOOS {
+	case "darwin":
+		return []string{"open", url}
+	case "windows":
+		return []string{"rundll32", "url.dll,FileProtocolHandler", url}
+	}
+	if _, err := exec.LookPath("termux-open-url"); err == nil {
+		return []string{"termux-open-url", url}
+	}
+	if _, err := exec.LookPath("wslview"); err == nil && os.Getenv("WSL_DISTRO_NAME") != "" {
+		return []string{"wslview", url}
+	}
+	return []string{"xdg-open", url}
+}
+
+// IsTerminalBrowser reports whether the browser command is a terminal
+// program (w3m, lynx...) that must take over the TTY.
+func IsTerminalBrowser(args []string) bool {
+	if len(args) == 0 {
+		return false
+	}
+	switch filepath.Base(args[0]) {
+	case "w3m", "lynx", "links", "elinks", "browsh", "carbonyl", "chawan", "cha":
+		return true
+	}
+	return false
+}
+
+// OpenURL launches a graphical browser in the background.
+func OpenURL(configured, url string) error {
+	if err := safe.WebURL(url); err != nil {
+		return err
+	}
+	args := BrowserCommand(configured, url)
+	// The program is the configured/system browser; the URL was validated
+	// above and is passed as a single argument (no shell).
+	c := exec.Command(args[0], args[1:]...) //nolint:gosec,noctx // G204: browser runs detached, outliving any context
+	c.Stdout, c.Stderr = nil, nil
+	if err := c.Start(); err != nil {
+		return fmt.Errorf("open browser (%s): %w", args[0], err)
+	}
+	go func() { _ = c.Wait() }()
+	return nil
+}
+
+// Editor returns the editor command (config > $VISUAL > $EDITOR > default).
+func Editor(configured string) []string {
+	for _, e := range []string{configured, os.Getenv("VISUAL"), os.Getenv("EDITOR")} {
+		if strings.TrimSpace(e) != "" {
+			return SplitCommand(e)
+		}
+	}
+	if runtime.GOOS == "windows" {
+		return []string{"notepad"}
+	}
+	for _, e := range []string{"nvim", "vim", "vi", "nano"} {
+		if _, err := exec.LookPath(e); err == nil {
+			return []string{e}
+		}
+	}
+	return []string{"vi"}
+}
+
+// EditorCmd builds the command to open file (optionally at line).
+//
+// Files opened this way hold untrusted content (fetched pages and code), so
+// editors that execute in-file settings are told not to: vim/neovim
+// modelines have a history of code-execution bugs, and Emacs file-local
+// variables can run code.
+func EditorCmd(configured, file string, line int) *exec.Cmd {
+	args := Editor(configured)
+	name := strings.TrimSuffix(filepath.Base(args[0]), ".exe")
+	switch name {
+	case "vim", "nvim", "gvim", "mvim", "view", "rvim":
+		args = append(args, "--cmd", "set nomodeline")
+	case "emacs":
+		args = append(args, "--eval", "(setq enable-local-variables nil enable-dir-local-variables nil)")
+	}
+	if line > 0 {
+		switch name {
+		case "vi", "vim", "nvim", "nano", "emacs", "emacsclient", "micro", "kak", "mg", "joe", "ne", "pico", "gvim", "mvim":
+			args = append(args, fmt.Sprintf("+%d", line), file)
+		case "hx", "helix", "subl", "sublime_text", "zed":
+			args = append(args, fmt.Sprintf("%s:%d", file, line))
+		case "code", "codium", "code-insiders", "cursor":
+			args = append(args, "-g", fmt.Sprintf("%s:%d", file, line))
+		default:
+			args = append(args, file)
+		}
+	} else {
+		args = append(args, file)
+	}
+	// The editor and its arguments come from the user's own configuration
+	// or $EDITOR; the file is a path we created.
+	c := exec.Command(args[0], args[1:]...) //nolint:gosec,noctx // G204: user-configured editor; interactive, run via tea.ExecProcess
+	return c
+}
+
+// SplitCommand splits a command line honouring simple quotes.
+func SplitCommand(s string) []string {
+	var out []string
+	var cur strings.Builder
+	var quote rune
+	has := false
+	for _, r := range s {
+		switch {
+		case quote != 0:
+			if r == quote {
+				quote = 0
+			} else {
+				cur.WriteRune(r)
+			}
+		case r == '"' || r == '\'':
+			quote = r
+			has = true
+		case r == ' ' || r == '\t':
+			if cur.Len() > 0 || has {
+				out = append(out, cur.String())
+				cur.Reset()
+				has = false
+			}
+		default:
+			cur.WriteRune(r)
+		}
+	}
+	if cur.Len() > 0 || has {
+		out = append(out, cur.String())
+	}
+	return out
+}
+
+// TempFile writes content to a new temporary file whose name ends in name
+// (so editors pick the right syntax). The returned cleanup removes it.
+func TempFile(name, content string) (string, func(), error) {
+	dir, err := os.MkdirTemp("", "search-tui-")
+	if err != nil {
+		return "", nil, err
+	}
+	p := filepath.Join(dir, SafeFileName(name))
+	if err := os.WriteFile(p, []byte(content), 0o600); err != nil {
+		_ = os.RemoveAll(dir)
+		return "", nil, err
+	}
+	return p, func() { _ = os.RemoveAll(dir) }, nil
+}
+
+// SafeFileName reduces an untrusted name (for example a path from a code
+// search result) to a harmless base name: no directories or "..", no
+// leading dot or dash (so it can't be read as an option or hidden), only
+// portable characters, and a bounded length. The extension is kept so
+// editors still pick the right syntax.
+func SafeFileName(name string) string {
+	name = filepath.Base(strings.ReplaceAll(name, "\\", "/"))
+	var b strings.Builder
+	for _, r := range name {
+		switch {
+		case r >= 'a' && r <= 'z', r >= 'A' && r <= 'Z', r >= '0' && r <= '9', r == '.', r == '_', r == '-', r == '+':
+			b.WriteRune(r)
+		default:
+			b.WriteRune('_')
+		}
+	}
+	out := strings.TrimLeft(b.String(), ".-")
+	if len(out) > 80 {
+		out = out[len(out)-80:]
+	}
+	if out == "" || strings.Trim(out, "._") == "" {
+		return "search.md"
+	}
+	return out
+}
+
+// ParseComposed extracts a query from a composed markdown file: comment
+// blocks ("<!-- ... -->") are ignored and remaining lines
+// are joined with spaces.
+func ParseComposed(content string) string {
+	var parts []string
+	inComment := false
+	for _, line := range strings.Split(content, "\n") {
+		t := strings.TrimSpace(line)
+		if inComment {
+			if strings.Contains(t, "-->") {
+				inComment = false
+			}
+			continue
+		}
+		if strings.HasPrefix(t, "<!--") {
+			if !strings.Contains(t, "-->") {
+				inComment = true
+			}
+			continue
+		}
+		if t == "" {
+			continue
+		}
+		parts = append(parts, t)
+	}
+	return strings.Join(parts, " ")
+}
+
+// ComposeTemplate is the initial content of a query composition file.
+func ComposeTemplate(current string) string {
+	return current + "\n\n<!--\nWrite your search query above. Lines are joined with spaces.\nUse !bangs anywhere (e.g. !gh, !ghc, !w). Save and quit to search;\nan empty file cancels.\n-->\n"
+}

@@ -1,0 +1,108 @@
+{
+  description = "search: a terminal UI and CLI for web and code search engines";
+
+  inputs.nixpkgs.url = "github:NixOS/nixpkgs/nixpkgs-unstable";
+
+  outputs =
+    { self, nixpkgs }:
+    let
+      inherit (nixpkgs) lib;
+      systems = [
+        "x86_64-linux"
+        "aarch64-linux"
+        "aarch64-darwin"
+      ];
+      forAllSystems = f: lib.genAttrs systems (system: f nixpkgs.legacyPackages.${system});
+      # Single source of truth for the version (strict SemVer, see tools/semver).
+      version = lib.trim (builtins.readFile ./VERSION);
+    in
+    {
+      packages = forAllSystems (pkgs: {
+        search-tui = pkgs.callPackage ./nix/package.nix { inherit version; };
+        default = self.packages.${pkgs.stdenv.hostPlatform.system}.search-tui;
+      });
+
+      apps = forAllSystems (pkgs: {
+        default = {
+          type = "app";
+          program = lib.getExe self.packages.${pkgs.stdenv.hostPlatform.system}.default;
+          meta.description = "Search the web and code from the terminal";
+        };
+      });
+
+      overlays.default = final: _prev: {
+        search-tui = final.callPackage ./nix/package.nix { inherit version; };
+      };
+
+      homeManagerModules.default = import ./nix/hm-module.nix self;
+      homeModules.default = self.homeManagerModules.default;
+
+      devShells = forAllSystems (pkgs: {
+        default = pkgs.mkShell {
+          packages = with pkgs; [
+            go
+            gopls
+            gotools
+          ];
+        };
+        # Lint and security tooling used by CI (versions pinned by flake.lock).
+        ci = pkgs.mkShell {
+          packages = with pkgs; [
+            go
+            golangci-lint
+            govulncheck
+            actionlint
+            zizmor
+            shellcheck
+            gitleaks
+            nixfmt
+          ];
+        };
+      });
+
+      checks = forAllSystems (
+        pkgs:
+        let
+          system = pkgs.stdenv.hostPlatform.system;
+          # Evaluate the home-manager module without depending on home-manager:
+          # stub the options it sets and check the generated TOML.
+          hmEval = lib.evalModules {
+            modules = [
+              self.homeManagerModules.default
+              {
+                options = {
+                  home.packages = lib.mkOption { type = lib.types.listOf lib.types.package; };
+                  xdg.configFile = lib.mkOption { type = lib.types.attrsOf lib.types.anything; };
+                };
+                config.programs.search-tui = {
+                  enable = true;
+                  settings = {
+                    default_engine = "wikipedia";
+                    engines.github.token_command = "gh auth token";
+                    keys.open = [ "o" ];
+                  };
+                };
+              }
+            ];
+            specialArgs = { inherit pkgs; };
+          };
+          configFile = hmEval.config.xdg.configFile."search-tui/config.toml".source;
+        in
+        {
+          package = self.packages.${system}.default;
+          hm-module = pkgs.runCommand "search-tui-hm-module-check" { } ''
+            grep -q 'default_engine = "wikipedia"' ${configFile}
+            XDG_CONFIG_HOME=$TMPDIR/cfg
+            mkdir -p $XDG_CONFIG_HOME/search-tui
+            cp ${configFile} $XDG_CONFIG_HOME/search-tui/config.toml
+            export XDG_CONFIG_HOME HOME=$TMPDIR
+            ${lib.getExe self.packages.${system}.default} --list-engines > $TMPDIR/engines
+            grep -q 'wikipedia (default)' $TMPDIR/engines
+            touch $out
+          '';
+        }
+      );
+
+      formatter = forAllSystems (pkgs: pkgs.nixfmt);
+    };
+}

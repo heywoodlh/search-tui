@@ -1,0 +1,123 @@
+# search-tui example configuration
+# Location: $XDG_CONFIG_HOME/search-tui/config.toml (default ~/.config/search-tui/config.toml,
+# %AppData%\search-tui\config.toml on Windows). Override with --config or $SEARCH_TUI_CONFIG.
+# Every key is optional.
+
+default_engine = "duckduckgo"     # any engine name or bang alias
+# default_code_engine = "github"  # default: github if a token is available, else sourcegraph
+fallback_engine = "bing"          # tried when a web search fails (rate limit, captcha); "none" disables
+# max_body_kb = 2048              # cap on downloaded response/page size (512 in low_power)
+default_type = "web"              # web | code | repos | issues
+# results = 20                    # 10 in low_power mode
+timeout = "15s"
+low_power = false                 # fewer results, smaller downloads, no animations
+# region = "us-en"                # engine-specific region code
+# safe_search = "moderate"        # strict | moderate | off
+# browser = "firefox"             # command (optionally with %s or {url}); on macOS an app name
+#                                 # like "Firefox" works. Unset: $BROWSER, then the system default
+#                                 # (xdg-open / open / Windows default / Termux). "default" forces the
+#                                 # system default. Terminal browsers (w3m, lynx, ...) run inside the TUI.
+# editor = "nvim"                 # default: $VISUAL, $EDITOR
+clipboard = "auto"                # auto | osc52 | tmux | command | none
+# clipboard_command = "tmux load-buffer -" # user shell command/pipeline; text on stdin
+
+[summary]
+enabled = true
+sentences = 3
+# Optional: pipe results to a local model for an abstractive summary.
+# command = "ollama run llama3.2:1b"
+# command_timeout = "60s"
+
+[ui]
+mouse = true
+layout = "auto"                   # legacy setting; details now open full-width on demand
+split_min_width = 110             # retained for compatibility with older configs
+snippet_lines = 2
+# hint_chars = "asdfghjkl"        # labels for f/F result hints
+status_bar = true
+theme = "default"                 # see `search --list-themes`; "ansi" follows your terminal's palette
+# Themes only change foreground colours; the terminal background is never painted.
+# Override individual colours (hex or ANSI 0-255; "" = terminal default):
+# colors = { accent = "#f5c2e7", url = "4" }
+# Keys: accent title text url muted border code key error success insert normal view
+ascii = false                     # avoid non-ASCII glyphs in the UI
+
+# Keybindings: action = [keys]. Unlisted actions keep their defaults.
+# Run `search` and press ? to see all actions.
+[keys]
+# up = ["k", "up"]
+# down = ["j", "down"]
+# open = ["o"]
+# yank_url = ["y"]
+# edit = ["e"]
+# quit = ["q", "ctrl+c"]
+# window = ["ctrl+w"]             # pane prefix: then s, v, h/j/k/l, w, q, c, o
+# split_vertical = ["|"]          # optional direct bindings (unbound by default):
+# split_horizontal = ["-"]        #   split_horizontal, split_vertical,
+# focus_next_pane = ["ctrl+n"]    #   focus_next_pane, close_pane
+
+# Extra bangs: value is an engine name, "engine:type", ":type", or a URL template.
+[bangs]
+# nixwiki = "https://wiki.nixos.org/w/index.php?search={query}"
+# mycode = "gitlab:code"
+
+# Credentials can be given literally, or via <name>_env, <name>_file or <name>_command
+# (for api_key, token, password and cx).
+
+[engines.google]
+# Programmable Search Engine: https://programmablesearchengine.google.com/
+# api_key_command = "pass show google/cse-key"
+# cx = "0123456789abcdef"
+
+[engines.kagi]
+# api_key_env = "KAGI_API_KEY"     # Kagi Search API
+# token_file = "~/.config/kagi/session-token"   # or the token from your Session Link
+
+[engines.brave]
+# api_key_command = "pass show brave/search-api"
+
+[engines.github]
+# token_command = "gh auth token"  # default: $GITHUB_TOKEN, $GH_TOKEN, then `gh auth token`
+# base_url = "https://github.example.com/api/v3"   # GitHub Enterprise
+
+[engines.gitlab]
+# token_env = "GITLAB_TOKEN"
+
+[engines.searxng]
+# base_url = "https://searx.example.org"
+
+# Custom engines ----------------------------------------------------------
+
+# Browser-only engine:
+# [engines.nixwiki]
+# type = "url"
+# url = "https://wiki.nixos.org/w/index.php?search={query}"
+# bangs = ["nw"]
+
+# Another instance of a built-in type (gitlab, github, searxng, sourcegraph, gitea/forgejo):
+# [engines.work]
+# type = "gitlab"
+# base_url = "https://gitlab.example.com"
+# token_command = "pass show work/gitlab"
+# bangs = ["work"]
+
+# JSON API engine:
+# [engines.myapi]
+# type = "json"
+# url = "https://api.example.com/search?q={query}&page={page}&n={limit}"
+# headers = { Authorization = "Bearer {token}" }
+# token_env = "MYAPI_TOKEN"
+# results_path = "data.items"
+# title_field = "name"
+# url_field = "link"
+# snippet_field = "description"
+# bangs = ["my"]
+
+# HTML scraping engine:
+# [engines.lobsters]
+# type = "html"
+# url = "https://lobste.rs/search?q={query}&what=stories"
+# result_selector = "li.story"
+# link_selector = "a.u-url"
+# snippet_selector = ".tags"
+# bangs = ["lob"]

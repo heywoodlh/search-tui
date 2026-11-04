@@ -1,0 +1,58 @@
+name: Semver
+
+# Strict Semantic Versioning gate (required check: `semver`).
+#
+# PRs are squash-merged, so the PR title becomes the commit on main. It must
+# be a Conventional Commit, and VERSION must change by exactly the bump that
+# title implies (see tools/semver):
+#   breaking (`!` / BREAKING CHANGE) -> major (minor while 0.y.z)
+#   feat -> minor   fix, perf, revert -> patch   others -> no change
+# Runs again when the title or description is edited.
+
+on:
+  pull_request:
+    types: [opened, edited, synchronize, reopened]
+
+permissions: {}
+
+concurrency:
+  group: semver-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  semver:
+    name: semver
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+          cache: false
+      - name: Check PR title and VERSION bump
+        env:
+          TITLE: ${{ github.event.pull_request.title }}
+          BODY: ${{ github.event.pull_request.body }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: |
+          head_version=$(tr -d '[:space:]' < VERSION)
+          base_version=$(git show "$BASE_SHA:VERSION" 2>/dev/null | tr -d '[:space:]' || true)
+          base_version=${base_version:-0.0.0} # before the first release
+
+          # Run the checker as it exists on the base branch, so a PR cannot
+          # weaken the rules it is judged by (falls back to the PR's copy
+          # until the checker exists on the base branch).
+          dir=.
+          if git cat-file -e "$BASE_SHA:tools/semver/main.go" 2>/dev/null; then
+            git worktree add --quiet --detach "$RUNNER_TEMP/base" "$BASE_SHA"
+            dir="$RUNNER_TEMP/base"
+          fi
+          cd "$dir"
+          go run ./tools/semver check -title "$TITLE" -body "$BODY" \
+            -base "$base_version" -head "$head_version"

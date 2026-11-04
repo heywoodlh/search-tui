@@ -1,0 +1,43 @@
+# golangci-lint v2 configuration. Run: golangci-lint run
+version: "2"
+
+run:
+  timeout: 5m
+
+linters:
+  default: standard # errcheck, govet, ineffassign, staticcheck, unused
+  enable:
+    - gosec # security problems
+    - bidichk # Trojan Source bidi characters
+    - bodyclose # unclosed HTTP response bodies
+    - noctx # HTTP requests without a context
+    - errorlint # error wrapping and comparison
+    - nilerr
+    - durationcheck
+    - copyloopvar
+    - unconvert
+    - misspell
+    - nolintlint # every //nolint must name the linter and say why
+    - gocritic
+  settings:
+    gosec:
+      excludes:
+        - G104 # unhandled errors: covered by errcheck
+    nolintlint:
+      require-explanation: true
+      require-specific: true
+    gocritic:
+      disabled-checks:
+        - ifElseChain
+  exclusions:
+    presets:
+      - std-error-handling # fmt.Fprint*, Close in defers, ...
+    rules:
+      # Tests read fixtures and temp files by variable path.
+      - path: _test\.go
+        linters: [gosec]
+        text: "G101|G304|G306"
+
+formatters:
+  enable:
+    - gofmt
