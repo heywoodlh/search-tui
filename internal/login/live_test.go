@@ -41,22 +41,18 @@ func TestLiveKagiValidate(t *testing.T) {
 	}
 }
 
-// TestLiveKagiSessionValidate checks a Session Link (a file holding the URL) is
-// detected as a session credential and accepted by the HTML interface.
+// TestLiveKagiSessionValidate checks a Session Link is detected as a session
+// credential and accepted by the HTML interface.
 func TestLiveKagiSessionValidate(t *testing.T) {
 	if os.Getenv("SEARCH_TUI_LIVE") == "" {
 		t.Skip("set SEARCH_TUI_LIVE=1 to hit the network")
 	}
-	path := strings.TrimSpace(os.Getenv("SEARCH_TUI_KAGI_SESSION"))
-	if path == "" {
-		t.Skip("set SEARCH_TUI_KAGI_SESSION to a file holding the Session Link")
-	}
-	b, err := os.ReadFile(path)
-	if err != nil {
-		t.Fatal(err)
+	link := strings.TrimSpace(os.Getenv("SEARCH_TUI_KAGI_SESSION"))
+	if link == "" {
+		t.Skip("set SEARCH_TUI_KAGI_SESSION to the Session Link URL")
 	}
 	p, _ := Lookup("kagi")
-	values, _, note, err := Validate(context.Background(), p, map[string]string{"credential": strings.TrimSpace(string(b))})
+	values, _, note, err := Validate(context.Background(), p, map[string]string{"credential": link})
 	if err != nil {
 		t.Fatalf("session link rejected: %v", err)
 	}

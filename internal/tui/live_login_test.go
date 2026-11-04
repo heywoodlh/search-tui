@@ -14,13 +14,9 @@ func TestLiveLoginSession(t *testing.T) {
 	if os.Getenv("SEARCH_TUI_LIVE") == "" {
 		t.Skip("set SEARCH_TUI_LIVE=1 to hit the network")
 	}
-	path := os.Getenv("SEARCH_TUI_KAGI_SESSION")
-	if path == "" {
-		t.Skip("set SEARCH_TUI_KAGI_SESSION to a file holding the Session Link")
-	}
-	link, err := os.ReadFile(path)
-	if err != nil {
-		t.Fatal(err)
+	link := strings.TrimSpace(os.Getenv("SEARCH_TUI_KAGI_SESSION"))
+	if link == "" {
+		t.Skip("set SEARCH_TUI_KAGI_SESSION to the Session Link")
 	}
 	authPath := filepath.Join(t.TempDir(), "auth.json")
 	t.Setenv("SEARCH_TUI_AUTH", authPath)
@@ -31,7 +27,7 @@ func TestLiveLoginSession(t *testing.T) {
 	if !r.cmd.active || r.cmd.prompt == "" {
 		t.Fatalf("prompt did not open: %+v", r.focus.err)
 	}
-	r.cmd.input.SetValue(strings.TrimSpace(string(link)))
+	r.cmd.input.SetValue(strings.TrimSpace(link))
 	cmd := r.handleKey(tea.KeyMsg{Type: tea.KeyEnter})
 	if cmd == nil {
 		t.Fatal("no command returned")
