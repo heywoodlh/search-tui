@@ -61,11 +61,11 @@ func deviceServer(t *testing.T, polls []string) *httptest.Server {
 
 func withEndpoints(t *testing.T, srv *httptest.Server) {
 	t.Helper()
-	oldDevice, oldToken, oldAPI := githubDeviceURL, githubTokenURL, githubAPIURL
+	oldDevice, oldToken, oldAPI := githubDeviceURL, githubGrantURL, githubAPIURL
 	githubDeviceURL = srv.URL + "/device"
-	githubTokenURL = srv.URL + "/token"
+	githubGrantURL = srv.URL + "/token"
 	githubAPIURL = srv.URL
-	t.Cleanup(func() { githubDeviceURL, githubTokenURL, githubAPIURL = oldDevice, oldToken, oldAPI })
+	t.Cleanup(func() { githubDeviceURL, githubGrantURL, githubAPIURL = oldDevice, oldToken, oldAPI })
 }
 
 func TestDeviceFlow(t *testing.T) {

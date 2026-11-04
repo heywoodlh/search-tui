@@ -167,7 +167,7 @@ func MethodFor(p Provider, values map[string]string) string {
 var (
 	httpClient      = &http.Client{Timeout: 30 * time.Second}
 	githubDeviceURL = "https://github.com/login/device/code"
-	githubTokenURL  = "https://github.com/login/oauth/access_token"
+	githubGrantURL  = "https://github.com/login/oauth/access_token"
 	githubAPIURL    = "https://api.github.com"
 	kagiAPIURL      = "https://kagi.com/api/v1/search"
 	kagiHTMLURL     = "https://kagi.com/html/search"
@@ -257,7 +257,7 @@ func WaitDevice(ctx context.Context, p Provider, dc DeviceCode) (config.AuthEntr
 			Error       string `json:"error"`
 			Description string `json:"error_description"`
 		}
-		if err := postForm(ctx, githubTokenURL, form, &resp); err != nil {
+		if err := postForm(ctx, githubGrantURL, form, &resp); err != nil {
 			return config.AuthEntry{}, err
 		}
 		switch resp.Error {
@@ -296,8 +296,7 @@ func WaitDevice(ctx context.Context, p Provider, dc DeviceCode) (config.AuthEntr
 // provider may rename the credential: Kagi accepts either an API key or a
 // Session Link token in the same prompt.
 func Validate(ctx context.Context, p Provider, values map[string]string) (map[string]string, string, string, error) {
-	switch p.Engine {
-	case "kagi":
+	if p.Engine == "kagi" {
 		return validateKagi(ctx, values["credential"])
 	}
 	return values, "", "", nil
@@ -331,7 +330,7 @@ func validateKagi(ctx context.Context, value string) (map[string]string, string,
 	case sessionChallenged:
 		return map[string]string{"token": tok}, "", "saved, but Kagi bot-challenged the check from this network; if searches fail, use an API key instead", nil
 	default:
-		return nil, "", "", errors.New("Kagi rejected the credential: neither a Search API key nor a valid Session Link")
+		return nil, "", "", errors.New("kagi rejected the credential: neither a Search API key nor a valid Session Link")
 	}
 }
 

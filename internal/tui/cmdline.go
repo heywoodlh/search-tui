@@ -1,17 +1,22 @@
 package tui
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"sort"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/charmbracelet/x/ansi"
+	"github.com/heywoodlh/search-tui/internal/config"
 	"github.com/heywoodlh/search-tui/internal/engine"
+	"github.com/heywoodlh/search-tui/internal/login"
+	"github.com/heywoodlh/search-tui/internal/sys"
 	"github.com/heywoodlh/search-tui/internal/theme"
 )
 
@@ -30,6 +35,11 @@ type cmdline struct {
 	comps   []string
 	compIdx int
 	compPre string
+	// prompt turns the command line into a one-value prompt (:login). The
+	// value is masked when secret, and submit receives ok=false on esc.
+	prompt string
+	secret bool
+	submit func(value string, ok bool) tea.Cmd
 }
 
 func newCmdline() cmdline {
@@ -37,6 +47,29 @@ func newCmdline() cmdline {
 	ti.Prompt = ""
 	ti.CharLimit = 1024
 	return cmdline{input: ti}
+}
+
+// loginSession tracks the credentials collected by :login while it prompts for
+// each field in turn.
+type loginSession struct {
+	provider login.Provider
+	values   map[string]string
+}
+
+// loginDeviceMsg carries a started device flow to the UI, which shows the code
+// and then polls for the token.
+type loginDeviceMsg struct {
+	provider login.Provider
+	code     login.DeviceCode
+}
+
+// loginDoneMsg reports the outcome of a login flow. The credential is written
+// to the auth file by the UI goroutine, not by the flow itself.
+type loginDoneMsg struct {
+	provider string
+	entry    config.AuthEntry
+	note     string
+	err      error
 }
 
 // invocation is a parsed command line.
@@ -349,6 +382,9 @@ func init() {
 				r.focus.showText("Engines", lines)
 				return nil
 			}},
+		{name: "login", min: 3, usage: "{provider}", desc: "save credentials for a provider (kagi, github, brave, google, mojeek, gitlab)", topic: "commands",
+			complete: func(*Root) []string { return login.Names() },
+			run:      func(r *Root, in invocation) error { return r.startLogin(strings.TrimSpace(in.args)) }},
 		{name: "bangs", min: 3, desc: "list !bangs", topic: "commands",
 			run: func(r *Root, in invocation) error {
 				var lines []string
@@ -386,7 +422,7 @@ func init() {
 // Version is shown by :version (set from the CLI).
 var Version = "dev"
 
-var helpTopics = []string{"keys", "commands", "panes", "tabs", "search", "results", "visual", "hints", "bangs", "mouse"}
+var helpTopics = []string{"keys", "commands", "panes", "tabs", "search", "results", "visual", "hints", "bangs", "login", "mouse"}
 
 var setOptions = []string{"layout=auto", "layout=split", "layout=stacked", "results=", "snippetlines=", "theme=", "hintchars="}
 
@@ -619,10 +655,154 @@ func orDefault(s, d string) string {
 	return s
 }
 
+// ---------------------------------------------------------------- login
+
+// startLogin runs :login {provider}: key providers prompt for each credential,
+// device providers show a code and poll for the token.
+func (r *Root) startLogin(name string) error {
+	if name == "" {
+		return errCmd("E471: Argument required: :login {" + strings.Join(login.Names(), "|") + "}")
+	}
+	p, ok := login.Lookup(name)
+	if !ok {
+		return errCmd("E475: Unknown provider: " + name + " (supported: " + strings.Join(login.Names(), ", ") + ")")
+	}
+	r.login = &loginSession{provider: p, values: map[string]string{}}
+	flash := r.focus.setFlash(p.Title + ": " + p.Docs)
+	if p.Method == login.MethodDevice {
+		r.pendingCmd = tea.Batch(flash, startDeviceLogin(p))
+		return nil
+	}
+	r.promptField(0)
+	r.pendingCmd = flash
+	return nil
+}
+
+// promptField collects field i of the current login session.
+func (r *Root) promptField(i int) {
+	s := r.login
+	if s == nil || i >= len(s.provider.Fields) {
+		return
+	}
+	f := s.provider.Fields[i]
+	r.openPrompt(f.Label+": ", f.Secret, func(v string, ok bool) tea.Cmd {
+		if !ok {
+			r.login = nil
+			return r.focus.setFlash("login cancelled")
+		}
+		if v == "" {
+			r.login = nil
+			return r.focus.setFlash("login cancelled: empty value")
+		}
+		s.values[f.Credential] = v
+		if i+1 < len(s.provider.Fields) {
+			r.promptField(i + 1)
+			return nil
+		}
+		return r.finishLogin(s)
+	})
+}
+
+// finishLogin validates the collected values and hands them to the UI.
+func (r *Root) finishLogin(s *loginSession) tea.Cmd {
+	p, values := s.provider, s.values
+	r.login = nil
+	return func() tea.Msg {
+		ctx, cancel := context.WithTimeout(context.Background(), 45*time.Second)
+		defer cancel()
+		normalized, account, note, err := login.Validate(ctx, p, values)
+		if err != nil {
+			return loginDoneMsg{provider: p.Engine, err: err}
+		}
+		return loginDoneMsg{provider: p.Engine, entry: config.AuthEntry{
+			Values:  normalized,
+			Account: account,
+		}, note: note}
+	}
+}
+
+// startDeviceLogin begins an OAuth device flow (GitHub).
+func startDeviceLogin(p login.Provider) tea.Cmd {
+	return func() tea.Msg {
+		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		defer cancel()
+		dc, err := login.StartDevice(ctx, p)
+		if err != nil {
+			return loginDoneMsg{provider: p.Engine, err: err}
+		}
+		return loginDeviceMsg{provider: p, code: dc}
+	}
+}
+
+// waitDevice polls until the user finishes the device flow.
+func waitDevice(p login.Provider, dc login.DeviceCode) tea.Cmd {
+	return func() tea.Msg {
+		ctx, cancel := context.WithTimeout(context.Background(), dc.ExpiresIn+time.Minute)
+		defer cancel()
+		e, err := login.WaitDevice(ctx, p, dc)
+		if err != nil {
+			return loginDoneMsg{provider: p.Engine, err: err}
+		}
+		return loginDoneMsg{provider: p.Engine, entry: e}
+	}
+}
+
+// showDevicePrompt displays the user code and starts polling.
+func (r *Root) showDevicePrompt(msg loginDeviceMsg) tea.Cmd {
+	lines := []string{
+		"Open " + msg.code.VerificationURI + " and enter this code:",
+		"",
+		"    " + r.focus.st.accent.Render(msg.code.UserCode),
+		"",
+	}
+	lines = append(lines, msg.provider.Notes...)
+	lines = append(lines, "", "Waiting for authorization… (the browser should have opened; esc closes this help)")
+	r.focus.showText("Login: "+msg.provider.Title, lines)
+	open := func() tea.Msg {
+		_ = sys.OpenURL(r.app.Cfg.Browser, msg.code.VerificationURI)
+		return nil
+	}
+	return tea.Batch(open, waitDevice(msg.provider, msg.code))
+}
+
+// loginDone saves the credential, reloads the engines and reports the result.
+func (r *Root) loginDone(msg loginDoneMsg) tea.Cmd {
+	if msg.err != nil {
+		r.focus.err = msg.err
+		return nil
+	}
+	p, ok := login.Lookup(msg.provider)
+	if !ok {
+		r.focus.err = fmt.Errorf("unknown provider %q", msg.provider)
+		return nil
+	}
+	if err := login.Save(p, msg.entry.Values, msg.entry.Account, msg.entry.Scopes); err != nil {
+		r.focus.err = err
+		return nil
+	}
+	if err := r.app.Reload(); err != nil {
+		r.focus.err = err
+		return nil
+	}
+	if r.focus.mode == modeHelp {
+		r.focus.mode = r.focus.prev
+	}
+	who := msg.entry.Account
+	if who == "" {
+		who = p.Engine
+	}
+	flash := fmt.Sprintf("logged in to %s (%s) · saved in %s", p.Title, who, config.AuthPath())
+	if msg.note != "" {
+		flash = fmt.Sprintf("logged in to %s (%s) · %s", p.Title, who, msg.note)
+	}
+	return r.focus.setFlash(flash)
+}
+
 // ---------------------------------------------------------------- input
 
 func (r *Root) openCmd(prefill string) {
 	r.cmd.active = true
+	r.cmd.prompt, r.cmd.secret, r.cmd.submit = "", false, nil
 	r.cmd.input.SetValue(prefill)
 	r.cmd.input.CursorEnd()
 	r.cmd.input.Focus()
@@ -631,8 +811,21 @@ func (r *Root) openCmd(prefill string) {
 	r.layout()
 }
 
+// openPrompt turns the command line into a single-value prompt. submit is
+// called with ok=false when the user cancels.
+func (r *Root) openPrompt(label string, secret bool, submit func(string, bool) tea.Cmd) {
+	r.cmd.active = true
+	r.cmd.prompt, r.cmd.secret, r.cmd.submit = label, secret, submit
+	r.cmd.input.SetValue("")
+	r.cmd.input.CursorEnd()
+	r.cmd.input.Focus()
+	r.cmd.comps = nil
+	r.layout()
+}
+
 func (r *Root) closeCmd() {
 	r.cmd.active = false
+	r.cmd.prompt, r.cmd.secret, r.cmd.submit = "", false, nil
 	r.cmd.input.Blur()
 	r.cmd.comps = nil
 	r.layout()
@@ -640,6 +833,29 @@ func (r *Root) closeCmd() {
 
 func (r *Root) cmdKey(msg tea.KeyMsg) tea.Cmd {
 	c := &r.cmd
+	if c.prompt != "" {
+		switch msg.String() {
+		case "esc", "ctrl+c":
+			submit := c.submit
+			r.closeCmd()
+			if submit != nil {
+				return submit("", false)
+			}
+			return nil
+		case "enter":
+			value := strings.TrimSpace(c.input.Value())
+			submit := c.submit
+			r.closeCmd()
+			if submit != nil {
+				return submit(value, true)
+			}
+			return nil
+		}
+		c.comps = nil
+		var cmd tea.Cmd
+		c.input, cmd = c.input.Update(msg)
+		return cmd
+	}
 	switch msg.String() {
 	case "esc", "ctrl+c":
 		r.closeCmd()
@@ -762,14 +978,21 @@ func isModifierOnly(head string) bool {
 func (r *Root) cmdView() string {
 	c := &r.cmd
 	st := r.focus.st
+	prefix := st.accent.Render(":")
 	val := []rune(c.input.Value())
+	if c.prompt != "" {
+		prefix = st.accent.Render(c.prompt)
+		if c.secret {
+			val = []rune(strings.Repeat("•", len(val)))
+		}
+	}
 	pos := min(c.input.Position(), len(val))
 	at, after := " ", ""
 	if pos < len(val) {
 		at, after = string(val[pos]), string(val[pos+1:])
 	}
-	line := st.accent.Render(":") + st.snippet.Render(string(val[:pos])) + st.accent.Underline(true).Render(at) + st.snippet.Render(after)
-	if len(c.comps) > 1 && c.compIdx >= 0 {
+	line := prefix + st.snippet.Render(string(val[:pos])) + st.accent.Underline(true).Render(at) + st.snippet.Render(after)
+	if c.prompt == "" && len(c.comps) > 1 && c.compIdx >= 0 {
 		var opts []string
 		in := parse(c.input.Value())
 		isLink := in.name == "open-link" || in.name == "copy-link"

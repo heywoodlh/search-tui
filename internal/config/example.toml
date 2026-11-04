@@ -62,7 +62,8 @@ ascii = false                     # avoid non-ASCII glyphs in the UI
 # mycode = "gitlab:code"
 
 # Credentials can be given literally, or via <name>_env, <name>_file or <name>_command
-# (for api_key, token, password and cx).
+# (for api_key, token, password and cx). In the TUI, `:login {provider}` stores
+# them in auth.json next to this file instead; anything set here wins over it.
 
 [engines.google]
 # Programmable Search Engine: https://programmablesearchengine.google.com/
@@ -70,8 +71,11 @@ ascii = false                     # avoid non-ASCII glyphs in the UI
 # cx = "0123456789abcdef"
 
 [engines.kagi]
-# api_key_env = "KAGI_API_KEY"     # Kagi Search API
-# token_file = "~/.config/kagi/session-token"   # or the token from your Session Link
+# api_key_env = "KAGI_API_KEY"     # Search API key: kagi.com/settings/api
+#                                  # (v1, billed per query)
+# token_file = "~/.config/kagi/session-token"   # Session Link token: uses your
+#                                               # Kagi plan, HTML interface, or
+#                                               # a Search API key
 
 [engines.brave]
 # api_key_command = "pass show brave/search-api"
