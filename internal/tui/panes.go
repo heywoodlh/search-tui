@@ -325,6 +325,8 @@ func (r *Root) clone(src *Model) *Model {
 	p.sel = src.sel
 	p.history = append([]string{}, src.history...)
 	p.histIdx = len(p.history)
+	p.nav = append([]navEntry{}, src.nav...)
+	p.navIdx = src.navIdx
 	for k, v := range src.pages {
 		p.pages[k] = v
 	}

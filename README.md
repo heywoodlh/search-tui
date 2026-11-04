@@ -194,6 +194,7 @@ result numbers fail rather than printing an empty value.
 | `e` | open the result in `$EDITOR` (page as Markdown, or the full code file at the matching line) |
 | `E` | open all results as Markdown in `$EDITOR` |
 | `n`/`p`, `]`/`[` | next/previous results page (`N` also goes back) |
+| `H` / `L` | search history: back / forward (results are restored, not re-fetched) |
 | `tab` / `shift+tab` | engine picker dropdown (see below) |
 | `t` | cycle search type (web → code → repos → issues) |
 | `ctrl+e`, `c` | compose the query in `$EDITOR` |
@@ -214,6 +215,12 @@ at the bottom left of the whole application; the focused pane's full border is
 highlighted.
 Bing sometimes serves the same HTML results for a requested next page; the
 TUI reports this rather than relabeling repeated results as a new page.
+
+`H` and `L` walk the searches shown in this pane like a browser's back and
+forward buttons. The history is per session and per pane, kept in memory
+only — nothing is written to disk between runs. Each entry keeps its
+results, so going back is instant and does not repeat the query; making a
+new search after going back drops the forward entries.
 
 Result and fetched-page links are numbered `[1]`, `[2]`, … in the TUI.
 `:open-link 2` opens a link in the browser and `:copy-link 2` copies it;

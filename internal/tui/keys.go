@@ -33,6 +33,8 @@ const (
 	ActSummarizePage  Action = "summarize_page"
 	ActNextPage       Action = "next_page"
 	ActPrevPage       Action = "prev_page"
+	ActHistoryBack    Action = "history_back"
+	ActHistoryForward Action = "history_forward"
 	ActNextEngine     Action = "next_engine"
 	ActPrevEngine     Action = "prev_engine"
 	ActCycleType      Action = "cycle_type"
@@ -91,6 +93,8 @@ var actionDefs = []actionDef{
 	{ActOpenSearchPage, []string{"O"}, "open the engine's search page in browser", ""},
 	{ActNextPage, []string{"n", "]"}, "next results page", "next pg"},
 	{ActPrevPage, []string{"p", "N", "["}, "previous results page", "prev pg"},
+	{ActHistoryBack, []string{"H"}, "go back in search history", ""},
+	{ActHistoryForward, []string{"L"}, "go forward in search history", ""},
 	{ActNextEngine, []string{"tab"}, "engine picker (press again to move down)", "engines"},
 	{ActPrevEngine, []string{"shift+tab"}, "engine picker (move up)", ""},
 	{ActCycleType, []string{"t"}, "cycle search type (web/code/repos/issues)", "type"},
