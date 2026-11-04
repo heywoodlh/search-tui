@@ -115,7 +115,10 @@ func New(a *app.App, query string, opts app.PlanOptions) *Model {
 	ti.Prompt = ""
 	ti.CharLimit = 2048
 	ti.SetValue(query)
-	ti.Focus()
+	// The program starts in normal mode, like new panes and tabs: press / or
+	// i to focus the search bar. A query passed on the command line is still
+	// submitted by Init.
+	ti.Blur()
 	sp := spinner.New()
 	sp.Spinner = spinner.MiniDot
 	if a.Cfg.LowPower {
@@ -131,6 +134,7 @@ func New(a *app.App, query string, opts app.PlanOptions) *Model {
 		initOpts: opts,
 		pages:    map[string]app.Page{},
 		pageErrs: map[string]error{},
+		mode:     modeNormal,
 		width:    80,
 		height:   24,
 		focused:  true,
@@ -202,7 +206,10 @@ type paneTargeted interface{ paneID() int }
 // ---------------------------------------------------------------- init
 
 func (m *Model) Init() tea.Cmd {
-	cmds := []tea.Cmd{textinput.Blink}
+	var cmds []tea.Cmd
+	if m.mode == modeInsert {
+		cmds = append(cmds, textinput.Blink)
+	}
 	if strings.TrimSpace(m.input.Value()) != "" {
 		cmds = append(cmds, m.submit())
 	}

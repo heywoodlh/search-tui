@@ -208,9 +208,10 @@ result numbers fail rather than printing an empty value.
 
 In insert mode, `enter` searches, `esc` returns to the results, `tab`
 completes a `!bang` (or opens the engine picker), `↑`/`↓` move through
-history and `ctrl+e` opens `$EDITOR`. New panes and tabs start in normal mode;
-press `/` to edit their queries. The active mode appears once at the bottom
-left of the whole application; the focused pane's full border is highlighted.
+history and `ctrl+e` opens `$EDITOR`. The TUI starts in normal mode, as do new
+panes and tabs; press `/` or `i` to edit a query. The active mode appears once
+at the bottom left of the whole application; the focused pane's full border is
+highlighted.
 Bing sometimes serves the same HTML results for a requested next page; the
 TUI reports this rather than relabeling repeated results as a new page.
 

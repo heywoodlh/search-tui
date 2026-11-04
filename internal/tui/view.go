@@ -246,7 +246,7 @@ func (m *Model) viewEmpty(l layoutInfo) string {
 		lines = append(lines, m.st.muted.Render("  No results."))
 	default:
 		tips := []string{
-			m.st.accent.Render("search") + m.st.muted.Render(" — type a query and press enter"),
+			m.st.accent.Render("search") + m.st.muted.Render(" — press / to type a query"),
 			"",
 			m.st.muted.Render("Bangs pick an engine:"),
 			"  !ddg duckduckgo   !b bing   !w wikipedia",

@@ -270,6 +270,26 @@ func TestCtrlLFocusesSearch(t *testing.T) {
 	}
 }
 
+func TestStartsInNormalMode(t *testing.T) {
+	a, err := app.New(config.Default())
+	if err != nil {
+		t.Fatal(err)
+	}
+	r := NewRoot(a, "", app.PlanOptions{})
+	r.Update(tea.WindowSizeMsg{Width: 80, Height: 24})
+	if p := r.focus; p.mode != modeNormal || p.input.Focused() {
+		t.Fatalf("launch: mode = %d, search bar focused = %v; want normal mode with a blurred search bar", p.mode, p.input.Focused())
+	}
+	lines := strings.Split(stripANSI(r.View()), "\n")
+	if last := strings.TrimSpace(lines[len(lines)-1]); !strings.HasPrefix(last, "NORMAL") {
+		t.Errorf("launch should show NORMAL at the bottom, got %q", last)
+	}
+	typeKeys(r, "i")
+	if p := r.focus; p.mode != modeInsert || !p.input.Focused() {
+		t.Fatalf("i should focus the search bar from the start page (mode %d)", p.mode)
+	}
+}
+
 func TestEnginePicker(t *testing.T) {
 	m := testModel(t)
 	send(m, tea.WindowSizeMsg{Width: 100, Height: 30})
