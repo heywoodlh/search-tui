@@ -195,6 +195,50 @@ func TestKagiSessionSkipsAPIProbe(t *testing.T) {
 	}
 }
 
+// TestKagiSessionLinkInAPIKey covers a Session Link pasted into api_key, the
+// field the docs name for Kagi: the API refuses it, so the HTML interface must
+// take over instead of failing.
+func TestKagiSessionLinkInAPIKey(t *testing.T) {
+	api := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusBadRequest)
+		_, _ = w.Write([]byte(`{"errors":[{"code":"general.invalid_token","message":"Token signature failed to verify"}]}`))
+	}))
+	defer api.Close()
+	html := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if got := r.Header.Get("Cookie"); got != "kagi_session=sess-123" {
+			t.Errorf("Cookie = %q", got)
+		}
+		_, _ = w.Write([]byte(`<html><body><div class="search-result"><a class="__sri_title_link" href="https://one.example">One</a></div></body></html>`))
+	}))
+	defer html.Close()
+
+	k := newKagiEngine(t, &config.Engine{APIKey: "https://kagi.com/search?token=sess-123&q=%s"}, api.URL, html.URL)
+	rs, err := k.Search(context.Background(), Query{Text: "q"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(rs) != 1 || rs[0].Title != "One" {
+		t.Errorf("results = %+v", rs)
+	}
+}
+
+func TestIsSessionLink(t *testing.T) {
+	for _, tc := range []struct {
+		value string
+		want  bool
+	}{
+		{"https://kagi.com/search?token=abc&q=%s", true},
+		{"http://kagi.com/search?token=abc", true},
+		{"https://kagi.com/search?q=abc", false},
+		{"bare-token", false},
+		{"", false},
+	} {
+		if got := isSessionLink(tc.value); got != tc.want {
+			t.Errorf("isSessionLink(%q) = %v, want %v", tc.value, got, tc.want)
+		}
+	}
+}
+
 // TestKagiChallengeIsAuthError checks that a bot-challenge page is reported as
 // an authentication problem, not as an empty result set.
 func TestKagiChallengeIsAuthError(t *testing.T) {

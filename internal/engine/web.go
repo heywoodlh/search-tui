@@ -372,7 +372,18 @@ func (k *Kagi) Search(ctx context.Context, q Query) ([]Result, error) {
 		return nil, err
 	}
 	if key != "" {
-		return k.api(ctx, q, key)
+		rs, err := k.api(ctx, q, key)
+		if err == nil {
+			return rs, nil
+		}
+		// A Session Link is a URL and people paste it into api_key, which is
+		// the documented Kagi credential. The Search API cannot use it, but
+		// the HTML interface can, so keep searching on the subscription
+		// instead of failing with a hint the user cannot act on.
+		if !isAuthErr(err) || !isSessionLink(key) {
+			return nil, err
+		}
+		return k.html(ctx, q, kagiToken(key))
 	}
 	if tok == "" {
 		return nil, &AuthError{Engine: "kagi", Hint: "api_key (Search API) or token (Session Link token)"}
@@ -441,7 +452,14 @@ func (k *Kagi) html(ctx context.Context, q Query, tok string) ([]Result, error) 
 	return trimResults(rs, limitOf(q, 20)), nil
 }
 
-// kagiToken accepts either a bare token or a full session link.
+// isSessionLink reports whether a credential is a Session Link URL (rather
+// than an opaque API key or bare token).
+func isSessionLink(v string) bool {
+	u, err := url.Parse(strings.TrimSpace(v))
+	return err == nil && (u.Scheme == "http" || u.Scheme == "https") && u.Query().Get("token") != ""
+}
+
+// kagiToken extracts the token from a Session Link, or returns the value as is.
 func kagiToken(t string) string {
 	if u, err := url.Parse(t); err == nil && u.Query().Get("token") != "" {
 		return u.Query().Get("token")
