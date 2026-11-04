@@ -126,6 +126,46 @@ func TestClearSecrets(t *testing.T) {
 	}
 }
 
+func TestSecretFallsBackWhenCredentialFileMissing(t *testing.T) {
+	authFile(t)
+	a, _ := LoadAuth()
+	if err := a.Set("kagi", AuthEntry{Method: "session", Values: map[string]string{"token": "from-login"}}); err != nil {
+		t.Fatal(err)
+	}
+	cfg, err := Parse("[engines.kagi]\ntoken_file = \"/nonexistent/kagi/session-token\"\n")
+	if err != nil {
+		t.Fatal(err)
+	}
+	got, err := cfg.EngineConfig("kagi").Secret(context.Background(), "token")
+	if err != nil {
+		t.Fatalf("a missing credential file must not fail: %v", err)
+	}
+	if got != "from-login" {
+		t.Errorf("Secret = %q, want the :login value", got)
+	}
+}
+
+func TestEmptyCredentialFileFallsThrough(t *testing.T) {
+	dir := t.TempDir()
+	empty := filepath.Join(dir, "empty-token")
+	if err := os.WriteFile(empty, nil, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	authFile(t)
+	a, _ := LoadAuth()
+	if err := a.Set("kagi", AuthEntry{Method: "session", Values: map[string]string{"token": "from-login"}}); err != nil {
+		t.Fatal(err)
+	}
+	cfg, err := Parse("[engines.kagi]\ntoken_file = \"" + filepath.ToSlash(empty) + "\"\n")
+	if err != nil {
+		t.Fatal(err)
+	}
+	got, err := cfg.EngineConfig("kagi").Secret(context.Background(), "token")
+	if err != nil || got != "from-login" {
+		t.Errorf("Secret = %q, %v", got, err)
+	}
+}
+
 func TestAuthPathEnv(t *testing.T) {
 	p := filepath.Join(t.TempDir(), "custom.json")
 	t.Setenv("SEARCH_TUI_AUTH", p)

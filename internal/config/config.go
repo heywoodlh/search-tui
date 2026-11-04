@@ -5,6 +5,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io/fs"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -391,10 +392,18 @@ func resolveSecret(ctx context.Context, lit, env, file, cmd string) (string, err
 	}
 	if file != "" {
 		b, err := os.ReadFile(ExpandHome(file))
-		if err != nil {
+		switch {
+		case err == nil && strings.TrimSpace(string(b)) != "":
+			return strings.TrimSpace(string(b)), nil
+		case err == nil:
+			// Empty file: keep looking at the other sources.
+		case errors.Is(err, fs.ErrNotExist):
+			// A configured path that is not there yet must not shadow another
+			// source: :login may have stored this credential in auth.json,
+			// and a stale config entry should not fail the search.
+		default:
 			return "", err
 		}
-		return strings.TrimSpace(string(b)), nil
 	}
 	if cmd != "" {
 		return RunCommand(ctx, cmd)
