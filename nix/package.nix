@@ -18,7 +18,9 @@ buildGoModule {
     ];
   };
 
-  vendorHash = "sha256-FmRynMiZOJ4hh27gCPN4pZmjuodt4WJ8yzPQW2B42js=";
+  # Updated whenever go.mod/go.sum change (`nix build .#search-tui` reports the
+  # expected hash on mismatch).
+  vendorHash = "sha256-yMTioKPzxE1/sDfseLFbry3Q8OqzGBGg2c8UD8X9POM=";
 
   subPackages = [ "cmd/search" ];
 
