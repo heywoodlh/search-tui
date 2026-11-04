@@ -66,7 +66,7 @@ Queries can be piped in: echo "zig allocators" | search -m
     o / O             open result / search page in the browser
     y / Y / M         copy URL / snippet or code / Markdown link
     e / E             result (page or code file) / all results in $EDITOR
-    s / S             summarise the page / toggle results summary
+    s                 summarise the page (automatic when details open)
     n N ] [           next / previous page
     tab shift+tab     engine picker (j k ↑ ↓ tab move, letters jump)
     t                 cycle type: web → code → repos → issues
@@ -185,7 +185,7 @@ $EDITOR (or editor = "...") is used for composing queries in a temporary Markdow
 
 <h2>8. Summaries and low power</h2>
 
-Summaries are extractive and computed on your device: sentences that agree with the rest of the results and match the query, without repeats. Opening a web result's details fetches and summarises that page automatically. For an abstractive summary, pipe results to a local model:
+Summaries are extractive and computed on your device: sentences that agree with the rest of the results and match the query, without repeats. Opening a web result's details fetches and summarises that page automatically, and that page summary is the only summary the TUI shows. For a summary of a whole result set, use the CLI (`search -s`); for an abstractive one, pipe results to a local model:
 
 <pre>    [summary]
     command = "ollama run llama3.2:1b"</pre>
