@@ -24,7 +24,11 @@ buildGoModule {
 
   subPackages = [ "cmd/search" ];
 
-  env.CGO_ENABLED = 0;
+  # Link against the stdenv's glibc instead of producing a fully static
+  # binary. Only the Linux binaries published to GitHub Releases are static
+  # (see scripts/build-release.sh); the flake package follows the nixpkgs
+  # convention of dynamic linking.
+  env.CGO_ENABLED = "1";
 
   ldflags = [
     "-s"
