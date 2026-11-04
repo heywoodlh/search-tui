@@ -420,3 +420,76 @@ func TestPickerLetterJumpG(t *testing.T) {
 		t.Errorf("h should jump to hackernews and keep the picker open, got %s", got)
 	}
 }
+
+// search shows a search's results the way a finished search does.
+func search(t *testing.T, m *Model, text string) {
+	t.Helper()
+	plan, err := m.app.Plan(text, app.PlanOptions{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	m.searchID = 100
+	m.Update(resultsMsg{pid: m.pid, id: m.searchID, text: text, plan: plan,
+		results: []engine.Result{{Title: text, URL: "https://example.com/" + text}}})
+}
+
+func TestSearchHistoryNavigation(t *testing.T) {
+	m := testModel(t)
+	search(t, m, "alpha")
+	search(t, m, "beta")
+
+	send(m, kp("H"))
+	if m.input.Value() != "alpha" || len(m.results) != 1 || m.results[0].Title != "alpha" {
+		t.Fatalf("H should restore the previous search: input=%q results=%v", m.input.Value(), m.results)
+	}
+	if m.mode != modeNormal {
+		t.Errorf("history navigation should land in normal mode, got %d", m.mode)
+	}
+	send(m, kp("H")) // start of history: no-op
+	if m.input.Value() != "alpha" {
+		t.Errorf("H at the start of history changed the search to %q", m.input.Value())
+	}
+
+	send(m, kp("L"))
+	if m.input.Value() != "beta" || m.results[0].Title != "beta" {
+		t.Errorf("L should restore the next search: input=%q", m.input.Value())
+	}
+	send(m, kp("L")) // end of history: no-op
+	if m.input.Value() != "beta" {
+		t.Errorf("L at the end of history changed the search to %q", m.input.Value())
+	}
+
+	send(m, kp("esc")) // back to the start page
+	if len(m.results) != 0 {
+		t.Fatal("esc should return to the start page")
+	}
+	send(m, kp("H"))
+	if m.input.Value() != "beta" || len(m.results) != 1 {
+		t.Errorf("H from the start page should restore the last search: input=%q", m.input.Value())
+	}
+}
+
+func TestSearchHistoryTruncatesForward(t *testing.T) {
+	m := testModel(t)
+	search(t, m, "alpha")
+	search(t, m, "beta")
+	send(m, kp("H"))
+
+	search(t, m, "gamma") // a new search drops the forward entry (beta)
+	if len(m.nav) != 2 {
+		t.Fatalf("history should be [alpha gamma], got %d entries", len(m.nav))
+	}
+	send(m, kp("L"))
+	if m.plan.Query.Text != "gamma" {
+		t.Errorf("L should not reach a dropped entry, got %q", m.plan.Query.Text)
+	}
+}
+
+func TestSearchHistoryRefreshReplacesEntry(t *testing.T) {
+	m := testModel(t)
+	search(t, m, "alpha")
+	search(t, m, "alpha") // r / refresh of the same search
+	if len(m.nav) != 1 {
+		t.Errorf("refreshing a search should not add history entries, got %d", len(m.nav))
+	}
+}

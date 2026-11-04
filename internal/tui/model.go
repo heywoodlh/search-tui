@@ -91,10 +91,27 @@ type Model struct {
 	history []string
 	histIdx int
 
+	// nav is the search history: every distinct search whose results were
+	// shown, in order. navIdx is the entry on screen (-1 when empty).
+	nav    []navEntry
+	navIdx int
+
 	// cache of rendered list items keyed by width
 	items      [][]string
 	itemsWidth int
 }
+
+// navEntry is one entry in the search history. The results are kept so
+// moving back and forward does not re-run the search.
+type navEntry struct {
+	text    string // query as typed, including any !bang
+	plan    app.Plan
+	results []engine.Result
+	sel     int
+}
+
+// navLimit bounds the in-memory search history of a pane.
+const navLimit = 100
 
 // Run starts the TUI.
 func Run(a *app.App, query string, opts app.PlanOptions) error {
@@ -138,6 +155,7 @@ func New(a *app.App, query string, opts app.PlanOptions) *Model {
 		width:    80,
 		height:   24,
 		focused:  true,
+		navIdx:   -1,
 	}
 	m.detail = viewport.New(0, 0)
 	m.help = viewport.New(0, 0)
@@ -157,6 +175,7 @@ func New(a *app.App, query string, opts app.PlanOptions) *Model {
 type resultsMsg struct {
 	pid     int
 	id      int
+	text    string // query as typed, including any !bang
 	plan    app.Plan
 	results []engine.Result
 	err     error
@@ -283,7 +302,7 @@ func (m *Model) search(text string) tea.Cmd {
 	return tea.Batch(m.spinner.Tick, func() tea.Msg {
 		defer cancel()
 		rs, err := a.Search(ctx, &plan)
-		return resultsMsg{pid: m.pid, id: id, plan: plan, results: rs, err: err}
+		return resultsMsg{pid: m.pid, id: id, text: text, plan: plan, results: rs, err: err}
 	})
 }
 
@@ -485,6 +504,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.err = nil
 		m.setResults(msg.results)
 		m.refreshDetail()
+		m.recordNav(msg.text, msg.plan, msg.results)
 		var cmds []tea.Cmd
 		if msg.plan.Notice != "" {
 			cmds = append(cmds, m.setFlash(msg.plan.Notice))
@@ -695,6 +715,10 @@ func (m *Model) handleKey(msg tea.KeyMsg) tea.Cmd {
 
 	// Normal and detail modes share most bindings.
 	switch {
+	case k.is(key, ActHistoryBack):
+		return m.historyGo(-1)
+	case k.is(key, ActHistoryForward):
+		return m.historyGo(1)
 	case k.is(key, ActQuit):
 		if m.mode == modeDetail {
 			m.mode = modeNormal
@@ -991,10 +1015,87 @@ func (m *Model) reset() {
 	m.opts = m.initOpts
 	m.setResults(nil)
 	m.histIdx = len(m.history)
+	// The start page is not a history entry: H brings the last search back.
+	m.navIdx = len(m.nav)
 	m.input.SetValue("")
 	m.mode = modeNormal
 	m.input.Blur()
 	m.refreshDetail()
+}
+
+// ---------------------------------------------------------------- search history
+
+// recordNav appends a search whose results are on screen. Refreshing the
+// same search replaces its entry; a new search drops any forward entries,
+// as a browser does. The history lives only in memory, per pane.
+func (m *Model) recordNav(text string, plan app.Plan, results []engine.Result) {
+	if m.navIdx >= 0 && m.navIdx < len(m.nav) && sameSearch(m.nav[m.navIdx].plan, plan) {
+		e := &m.nav[m.navIdx]
+		e.text, e.plan, e.results, e.sel = text, plan, results, m.sel
+		return
+	}
+	if m.navIdx < len(m.nav)-1 {
+		m.nav = m.nav[:m.navIdx+1]
+	}
+	m.nav = append(m.nav, navEntry{text: text, plan: plan, results: results, sel: m.sel})
+	if len(m.nav) > navLimit {
+		m.nav = m.nav[len(m.nav)-navLimit:]
+	}
+	m.navIdx = len(m.nav) - 1
+}
+
+// historyGo moves d entries through the search history (-1 back, +1 forward)
+// and restores the one it lands on. It never fetches anything: the stored
+// results are shown again.
+func (m *Model) historyGo(d int) tea.Cmd {
+	i := m.navIdx + d
+	if m.navIdx < 0 || i < 0 || i >= len(m.nav) {
+		return nil
+	}
+	m.navIdx = i
+	m.restoreNav(m.nav[i])
+	return nil
+}
+
+// restoreNav shows a history entry again without re-running the search.
+func (m *Model) restoreNav(e navEntry) {
+	if m.cancel != nil {
+		m.cancel()
+		m.cancel = nil
+	}
+	m.searchID++ // ignore in-flight results from the search being left
+	m.loading, m.busy, m.pendingPage = false, "", ""
+	m.err = nil
+	m.pending, m.count = nil, 0
+	m.plan = e.plan
+	q := e.plan.Query
+	m.opts = app.PlanOptions{Kind: q.Kind, Page: q.Page, Limit: q.Limit, Lang: q.Lang, Repo: q.Repo}
+	if e.plan.Engine != nil {
+		m.opts.Engine = e.plan.Engine.Name()
+	}
+	m.setResults(e.results)
+	if len(e.results) > 0 {
+		m.sel = min(max(e.sel, 0), len(e.results)-1)
+	}
+	m.ensureVisible()
+	m.input.SetValue(e.text)
+	m.input.CursorEnd()
+	m.histIdx = len(m.history)
+	m.mode = modeNormal
+	m.input.Blur()
+	m.refreshDetail()
+}
+
+// sameSearch reports whether two plans are the same search (a refresh, not a
+// new history entry).
+func sameSearch(a, b app.Plan) bool {
+	name := func(p app.Plan) string {
+		if p.Engine == nil {
+			return ""
+		}
+		return p.Engine.Name()
+	}
+	return a.Query == b.Query && a.Bang == b.Bang && name(a) == name(b)
 }
 
 // jump selects result i (clamped).
