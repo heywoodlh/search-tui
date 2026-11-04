@@ -83,7 +83,7 @@ func TestSecretPermissionWarning(t *testing.T) {
 		t.Fatal(err)
 	}
 	// WriteFile honours the process umask; make the intended exposure explicit.
-	if err := os.Chmod(p, 0o644); err != nil {
+	if err := os.Chmod(p, 0o644); err != nil { //nolint:gosec // G302: deliberately world-readable fixture to test the warning
 		t.Fatal(err)
 	}
 	c, err := Load(p)

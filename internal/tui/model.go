@@ -932,14 +932,14 @@ func (m *Model) handleMouse(msg tea.MouseMsg) tea.Cmd {
 		if msg.Button == tea.MouseButtonWheelUp {
 			d = -1
 		}
-		switch {
-		case m.mode == modeHelp:
+		switch m.mode {
+		case modeHelp:
 			if d > 0 {
 				m.help.ScrollDown(3)
 			} else {
 				m.help.ScrollUp(3)
 			}
-		case m.mode == modeDetail:
+		case modeDetail:
 			if d > 0 {
 				m.detail.ScrollDown(3)
 			} else {
