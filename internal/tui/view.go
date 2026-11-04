@@ -7,8 +7,8 @@ import (
 
 	"github.com/charmbracelet/lipgloss"
 	"github.com/charmbracelet/x/ansi"
-	"github.com/heywoodlh/tui-search/internal/engine"
-	"github.com/heywoodlh/tui-search/internal/safe"
+	"github.com/heywoodlh/search-tui/internal/engine"
+	"github.com/heywoodlh/search-tui/internal/safe"
 )
 
 type layoutInfo struct {

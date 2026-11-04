@@ -4,7 +4,7 @@ package main
 import (
 	"os"
 
-	"github.com/heywoodlh/tui-search/internal/cli"
+	"github.com/heywoodlh/search-tui/internal/cli"
 )
 
 func main() {

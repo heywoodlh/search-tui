@@ -1,6 +1,6 @@
-# tui-search example configuration
-# Location: $XDG_CONFIG_HOME/tui-search/config.toml (default ~/.config/tui-search/config.toml,
-# %AppData%\tui-search\config.toml on Windows). Override with --config or $TUI_SEARCH_CONFIG.
+# search-tui example configuration
+# Location: $XDG_CONFIG_HOME/search-tui/config.toml (default ~/.config/search-tui/config.toml,
+# %AppData%\search-tui\config.toml on Windows). Override with --config or $SEARCH_TUI_CONFIG.
 # Every key is optional.
 
 default_engine = "duckduckgo"     # any engine name or bang alias

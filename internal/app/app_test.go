@@ -7,9 +7,9 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/heywoodlh/tui-search/internal/config"
-	"github.com/heywoodlh/tui-search/internal/engine"
-	"github.com/heywoodlh/tui-search/internal/sys"
+	"github.com/heywoodlh/search-tui/internal/config"
+	"github.com/heywoodlh/search-tui/internal/engine"
+	"github.com/heywoodlh/search-tui/internal/sys"
 )
 
 func newApp(t *testing.T, toml string) *App {

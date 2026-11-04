@@ -1,4 +1,4 @@
-module github.com/heywoodlh/tui-search
+module github.com/heywoodlh/search-tui
 
 go 1.26.0
 

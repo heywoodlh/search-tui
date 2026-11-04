@@ -1,4 +1,4 @@
-// Package config loads and resolves the TOML configuration for tui-search.
+// Package config loads and resolves the TOML configuration for search-tui.
 package config
 
 import (
@@ -18,7 +18,7 @@ import (
 )
 
 // AppName is used for config/cache directory names.
-const AppName = "tui-search"
+const AppName = "search-tui"
 
 // Config is the top-level configuration file structure.
 type Config struct {
@@ -247,7 +247,7 @@ func Dir() string {
 
 // DefaultPath returns the default configuration file path.
 func DefaultPath() string {
-	if p := os.Getenv("TUI_SEARCH_CONFIG"); p != "" {
+	if p := os.Getenv("SEARCH_TUI_CONFIG"); p != "" {
 		return p
 	}
 	return filepath.Join(Dir(), "config.toml")
@@ -273,12 +273,12 @@ func Load(path string) (*Config, error) {
 		for _, k := range undec {
 			keys = append(keys, k.String())
 		}
-		fmt.Fprintf(os.Stderr, "tui-search: warning: unknown config keys in %s: %s\n", path, strings.Join(keys, ", "))
+		fmt.Fprintf(os.Stderr, "search-tui: warning: unknown config keys in %s: %s\n", path, strings.Join(keys, ", "))
 	}
 	c.path = path
 	c.applyDefaults()
 	if w := c.secretPermissionWarning(); w != "" {
-		fmt.Fprintln(os.Stderr, "tui-search: warning:", w)
+		fmt.Fprintln(os.Stderr, "search-tui: warning:", w)
 	}
 	return c, nil
 }

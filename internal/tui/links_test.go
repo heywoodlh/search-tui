@@ -8,8 +8,8 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
-	"github.com/heywoodlh/tui-search/internal/app"
-	"github.com/heywoodlh/tui-search/internal/engine"
+	"github.com/heywoodlh/search-tui/internal/app"
+	"github.com/heywoodlh/search-tui/internal/engine"
 )
 
 func TestLinkCommandsAndCompletion(t *testing.T) {

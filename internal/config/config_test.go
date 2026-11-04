@@ -64,7 +64,7 @@ token_command = "echo from-command"
 }
 
 func TestLoadMissingDefault(t *testing.T) {
-	t.Setenv("TUI_SEARCH_CONFIG", filepath.Join(t.TempDir(), "nope.toml"))
+	t.Setenv("SEARCH_TUI_CONFIG", filepath.Join(t.TempDir(), "nope.toml"))
 	c, err := Load("")
 	if err != nil || c.DefaultEngine != "duckduckgo" {
 		t.Errorf("missing default config should yield defaults: %v", err)

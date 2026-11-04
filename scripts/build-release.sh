@@ -34,7 +34,7 @@ for t in "${targets[@]}"; do
   [[ $os == windows ]] && name+=.exe
   echo "building $name"
   GOOS=$os GOARCH=$arch GOARM=${armv:-} CGO_ENABLED=0 go build -trimpath \
-    -ldflags "-s -w -X github.com/heywoodlh/tui-search/internal/cli.Version=$version" \
+    -ldflags "-s -w -X github.com/heywoodlh/search-tui/internal/cli.Version=$version" \
     -o "$out/$name" ./cmd/search
 done
 

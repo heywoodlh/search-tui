@@ -3,8 +3,8 @@ package bang
 import (
 	"testing"
 
-	"github.com/heywoodlh/tui-search/internal/config"
-	"github.com/heywoodlh/tui-search/internal/engine"
+	"github.com/heywoodlh/search-tui/internal/config"
+	"github.com/heywoodlh/search-tui/internal/engine"
 )
 
 func TestExtract(t *testing.T) {

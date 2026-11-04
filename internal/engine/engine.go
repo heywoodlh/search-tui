@@ -9,8 +9,8 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/heywoodlh/tui-search/internal/config"
-	"github.com/heywoodlh/tui-search/internal/safe"
+	"github.com/heywoodlh/search-tui/internal/config"
+	"github.com/heywoodlh/search-tui/internal/safe"
 )
 
 // Kind is the type of search to perform.

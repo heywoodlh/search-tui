@@ -15,10 +15,10 @@ import (
 	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
-	"github.com/heywoodlh/tui-search/internal/app"
-	"github.com/heywoodlh/tui-search/internal/engine"
-	"github.com/heywoodlh/tui-search/internal/safe"
-	"github.com/heywoodlh/tui-search/internal/sys"
+	"github.com/heywoodlh/search-tui/internal/app"
+	"github.com/heywoodlh/search-tui/internal/engine"
+	"github.com/heywoodlh/search-tui/internal/safe"
+	"github.com/heywoodlh/search-tui/internal/sys"
 )
 
 type mode int

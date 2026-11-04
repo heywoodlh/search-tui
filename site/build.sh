@@ -4,6 +4,7 @@
 # Usage: site/build.sh OUT_DIR BASE_URL [DEMO_DIR]
 #
 # DEMO_DIR holds demo.webm, demo.mp4 and demo.png from demo/record.sh.
+# Without a recording, the committed screenshot still appears on the site.
 #
 # Pages in site/pages/*.html are plain-text fragments (only links, a few
 # headings and the demo container are markup). They are wrapped in a tiny
@@ -16,7 +17,7 @@ base="${2:?usage: build.sh OUT_DIR BASE_URL [DEMO_DIR]}"
 demo="${3:-}"
 base="${base%/}/"
 here="$(cd "$(dirname "$0")" && pwd)"
-repo="https://github.com/heywoodlh/tui-search"
+repo="https://github.com/heywoodlh/search-tui"
 
 rm -rf "$out"
 mkdir -p "$out"
@@ -25,9 +26,11 @@ cp "$here/../assets/icon.svg" "$out/icon.svg"
 touch "$out/.nojekyll"
 
 have_demo=false
-if [[ -n "$demo" && -s "$demo/demo.mp4" && -s "$demo/demo.webm" ]]; then
+if [[ -n "$demo" && -s "$demo/demo.mp4" && -s "$demo/demo.webm" && -s "$demo/demo.png" ]]; then
   cp "$demo"/demo.{webm,mp4,png} "$out/"
   have_demo=true
+else
+  cp "$here/../assets/screenshot.png" "$out/demo.png"
 fi
 
 # render NAME TITLE DESCRIPTION: site/pages/NAME.html -> OUT/(NAME/)index.html
@@ -53,10 +56,11 @@ render() {
     END { if (inpre) printf "</pre>\n" }
   ')"
   if [[ "$name" == index ]]; then
+    body="${body//\{\{SCREENSHOT\}\}/<img class=\"demo\" src=\"demo.png\" alt=\"search TUI showing Stack Overflow results and an on-device summary for rust borrow checker\" width=\"1200\" height=\"720\">}"
     if $have_demo; then
-      body="${body//\{\{DEMO\}\}/<video class=\"demo\" autoplay loop muted playsinline controls preload=\"metadata\" poster=\"demo.png\" width=\"1200\" height=\"720\" aria-label=\"search demo\"><source src=\"demo.webm\" type=\"video\/webm\"><source src=\"demo.mp4\" type=\"video\/mp4\"><\/video>}"
+      body="${body//\{\{DEMO_LINK\}\}/<a href=\"demo.mp4\">demo video<\/a>}"
     else
-      body="${body//\{\{DEMO\}\}/(demo recording unavailable for this build)}"
+      body="${body//\{\{DEMO_LINK\}\}/(demo video unavailable for this build)}"
     fi
   fi
   {

@@ -69,7 +69,7 @@ squash-merged pull request with passing `posture` and `semver` checks (see
 blocks force-pushes and deletion:
 
 ```sh
-gh api -X POST repos/heywoodlh/tui-search/rulesets --input - <<'JSON'
+gh api -X POST repos/heywoodlh/search-tui/rulesets --input - <<'JSON'
 {
   "name": "main: require PR + posture",
   "target": "branch",

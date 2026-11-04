@@ -95,7 +95,7 @@ func TestSafeFileName(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer cleanup()
-	if filepath.Base(filepath.Dir(p)) == "" || !strings.Contains(filepath.Dir(p), "tui-search-") || filepath.Base(p) != "escape.go" {
+	if filepath.Base(filepath.Dir(p)) == "" || !strings.Contains(filepath.Dir(p), "search-tui-") || filepath.Base(p) != "escape.go" {
 		t.Errorf("temp file escaped its directory: %s", p)
 	}
 }

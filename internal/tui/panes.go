@@ -7,7 +7,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/charmbracelet/x/ansi"
-	"github.com/heywoodlh/tui-search/internal/app"
+	"github.com/heywoodlh/search-tui/internal/app"
 )
 
 // Vim-style split panes. Each pane is an independent Model (search

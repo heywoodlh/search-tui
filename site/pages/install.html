@@ -4,23 +4,23 @@
 
 Run it once:
 
-    nix run github:heywoodlh/tui-search -- "hello world"
+    nix run github:heywoodlh/search-tui -- "hello world"
 
 Install into your profile:
 
-    nix profile install github:heywoodlh/tui-search
+    nix profile install github:heywoodlh/search-tui
 
 Or add the flake as an input. It provides packages for x86_64-linux, aarch64-linux and aarch64-darwin, plus overlays.default.
 
 <h2>home-manager</h2>
 
     {
-      inputs.tui-search.url = "github:heywoodlh/tui-search";
+      inputs.search-tui.url = "github:heywoodlh/search-tui";
 
       # in your home-manager configuration:
-      imports = [ inputs.tui-search.homeManagerModules.default ];
+      imports = [ inputs.search-tui.homeManagerModules.default ];
 
-      programs.tui-search = {
+      programs.search-tui = {
         enable = true;
         settings = {
           default_engine = "duckduckgo";
@@ -33,11 +33,11 @@ Or add the flake as an input. It provides packages for x86_64-linux, aarch64-lin
       };
     }
 
-settings takes every key of the TOML config and writes ~/.config/tui-search/config.toml. Keep secrets out of it (they would land in the Nix store): use *_file, *_command or *_env instead.
+settings takes every key of the TOML config and writes ~/.config/search-tui/config.toml. Keep secrets out of it (they would land in the Nix store): use *_file, *_command or *_env instead.
 
 <h2>Go</h2>
 
-    go install github.com/heywoodlh/tui-search/cmd/search@latest
+    go install github.com/heywoodlh/search-tui/cmd/search@latest
 
 Needs Go 1.25 or newer. The binary is called search.
 
@@ -59,12 +59,12 @@ OpenBSD requires system calls to go through its libc, so that build links the ba
 
 <h2>Windows</h2>
 
-Use search-windows-amd64.exe (or arm64) in Windows Terminal. The config file lives at %AppData%\tui-search\config.toml.
+Use search-windows-amd64.exe (or arm64) in Windows Terminal. The config file lives at %AppData%\search-tui\config.toml.
 
 <h2>From source</h2>
 
     git clone {{REPO}}
-    cd tui-search
+    cd search-tui
     go build -o search ./cmd/search     # or: nix build
 
 <h2>Next</h2>

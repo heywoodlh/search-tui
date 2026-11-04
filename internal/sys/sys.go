@@ -12,7 +12,7 @@ import (
 	"strings"
 
 	osc52 "github.com/aymanbagabas/go-osc52/v2"
-	"github.com/heywoodlh/tui-search/internal/safe"
+	"github.com/heywoodlh/search-tui/internal/safe"
 )
 
 // Copy places text on the clipboard and returns a short description of the
@@ -344,7 +344,7 @@ func SplitCommand(s string) []string {
 // TempFile writes content to a new temporary file whose name ends in name
 // (so editors pick the right syntax). The returned cleanup removes it.
 func TempFile(name, content string) (string, func(), error) {
-	dir, err := os.MkdirTemp("", "tui-search-")
+	dir, err := os.MkdirTemp("", "search-tui-")
 	if err != nil {
 		return "", nil, err
 	}

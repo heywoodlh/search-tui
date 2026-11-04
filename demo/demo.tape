@@ -46,12 +46,13 @@ Sleep 800ms
 Type "rust borrow checker !so"
 Sleep 400ms
 Enter
-Wait+Screen /NOR\s+1\/\d+/
+Wait+Screen /stackoverflow.*1\/[0-9]+/
 Sleep 1.5s
 Type "j"
 Sleep 600ms
 Type "j"
 Sleep 600ms
+Screenshot "out/demo.png"
 Enter
 Sleep 2s
 Escape
@@ -72,40 +73,7 @@ Ctrl+W
 Type "o"
 Sleep 800ms
 
-# 3. Pick an engine from the tab dropdown.
-Escape
-Wait+Screen /type a query/
-Type "bubbletea tui framework"
-Sleep 400ms
-Tab
-Sleep 900ms
-Tab
-Sleep 600ms
-Tab
-Sleep 600ms
-Type "g"
-Sleep 900ms
-Enter
-Wait+Screen /github·repos.*\n(.*\n)*.*NOR\s+1\//
-Sleep 2s
-
-# 4. Code search on Sourcegraph (no token or rate limit); open a result.
-Escape
-Wait+Screen /type a query/
-Type "tea.NewProgram lang:go !sg"
-Sleep 400ms
-Enter
-Wait+Screen /NOR\s+1\/\d+/
-Sleep 1.5s
-Type "j"
-Sleep 600ms
-Enter
-Sleep 2.5s
-Screenshot "out/demo.png"
-Escape
-Sleep 600ms
-
-# 5. Help, then quit.
+# 3. Help, then quit.
 Type "?"
 Sleep 2.5s
 Type "?"
@@ -113,7 +81,7 @@ Sleep 400ms
 Type "q"
 Sleep 600ms
 
-# 6. Themes.
+# 4. Themes.
 Type "search --list-themes"
 Sleep 300ms
 Enter

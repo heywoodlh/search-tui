@@ -10,7 +10,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/heywoodlh/tui-search/internal/engine"
+	"github.com/heywoodlh/search-tui/internal/engine"
 )
 
 func TestSelectedField(t *testing.T) {

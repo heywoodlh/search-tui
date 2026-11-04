@@ -2,12 +2,12 @@
 
 A fast TUI and CLI for DuckDuckGo, Google, Bing, Kagi, Brave, GitHub, Sourcegraph and more, with DuckDuckGo-style !bangs, copyable code snippets and summaries computed on your own device. One small static binary for Linux, macOS and Windows, from a Raspberry Pi to a 4K monitor.
 
-{{DEMO}}
-<a href="demo.mp4">demo video</a>
+{{SCREENSHOT}}
+{{DEMO_LINK}}
 
 <h2>Try it</h2>
 
-    nix run github:heywoodlh/tui-search -- "nixos flakes tutorial"
+    nix run github:heywoodlh/search-tui -- "nixos flakes tutorial"
 
     search                               # open the TUI
     search "rust lifetimes"              # results + summary, inline
@@ -29,7 +29,7 @@ Single-quote queries containing ! in bash and zsh (history expansion).
 
 - TUI: Vim keys, arrows and mouse; configurable keybindings; a status bar with hints; Esc always goes back; Tab opens an engine picker; Ctrl+L jumps to the search bar; ctrl+w splits panes like vim to compare engines side by side.
 
-- Layouts: Split preview on wide screens, stacked on phones, tablets and tmux panes; reflows live on resize.
+- Layouts: A pinned result peek above the scrolling list and full-width details on demand; reflows live on phones, tablets and wide screens.
 
 - Themes: Catppuccin, Dracula, Nord, Gruvbox, Solarized, Tokyo Night and more, foreground-only: your terminal background stays.
 

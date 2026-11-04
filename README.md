@@ -1,8 +1,8 @@
 <img src="assets/icon.svg" width="64" height="64" alt="">
 
-# tui-search
+# search-tui
 
-Website: <https://heywoodlh.github.io/tui-search/> (also readable with `curl`).
+Website: <https://heywoodlh.github.io/search-tui/> (also readable with `curl`).
 
 `search` is a fast terminal client for web and code search. It has a full
 TUI and an inline CLI, DuckDuckGo-style `!bangs`, and summaries computed on
@@ -72,8 +72,8 @@ search -E                                # write the query in $EDITOR
 ### Nix
 
 ```sh
-nix run github:heywoodlh/tui-search -- "hello world"
-nix profile install github:heywoodlh/tui-search
+nix run github:heywoodlh/search-tui -- "hello world"
+nix profile install github:heywoodlh/search-tui
 ```
 
 The flake provides `packages.<system>.default`, `overlays.default`,
@@ -84,11 +84,11 @@ The flake provides `packages.<system>.default`, `overlays.default`,
 
 ```nix
 {
-  inputs.tui-search.url = "github:heywoodlh/tui-search";
+  inputs.search-tui.url = "github:heywoodlh/search-tui";
   # ...
   home-manager.users.me = {
-    imports = [ inputs.tui-search.homeManagerModules.default ];
-    programs.tui-search = {
+    imports = [ inputs.search-tui.homeManagerModules.default ];
+    programs.search-tui = {
       enable = true;
       settings = {
         default_engine = "kagi";
@@ -110,7 +110,7 @@ The flake provides `packages.<system>.default`, `overlays.default`,
 ```
 
 `settings` accepts every key of the TOML config below. It is written to
-`~/.config/tui-search/config.toml` on both Linux and macOS. Keep secrets out
+`~/.config/search-tui/config.toml` on both Linux and macOS. Keep secrets out
 of `settings` because they would end up in the Nix store. Use `*_file`,
 `*_command` or `*_env` instead.
 
@@ -118,16 +118,16 @@ of `settings` because they would end up in the Nix store. Use `*_file`,
 
 ```sh
 # private repo: export GOPRIVATE=github.com/heywoodlh/*
-go install github.com/heywoodlh/tui-search/cmd/search@latest
+go install github.com/heywoodlh/search-tui/cmd/search@latest
 ```
 
-On Windows the config file lives at `%AppData%\tui-search\config.toml`. The
+On Windows the config file lives at `%AppData%\search-tui\config.toml`. The
 default editor is `notepad`, `clip` handles the clipboard, and links open in
 the default browser. Windows Terminal supports the mouse and colours.
 
 ### Prebuilt binaries
 
-Every [release](https://github.com/heywoodlh/tui-search/releases) ships these
+Every [release](https://github.com/heywoodlh/search-tui/releases) ships these
 binaries, plus a `SHA256SUMS` file:
 
 | OS | Architectures | Linking |
@@ -140,7 +140,7 @@ binaries, plus a `SHA256SUMS` file:
 | Windows | amd64, arm64 | `.exe` |
 
 ```sh
-curl -LO https://github.com/heywoodlh/tui-search/releases/latest/download/search-linux-amd64
+curl -LO https://github.com/heywoodlh/search-tui/releases/latest/download/search-linux-amd64
 chmod +x search-linux-amd64 && mv search-linux-amd64 ~/.local/bin/search
 ```
 
@@ -394,9 +394,9 @@ a type alone (`":code"`), or a URL template.
 
 ## Configuration
 
-The config file is `$XDG_CONFIG_HOME/tui-search/config.toml` (by default
-`~/.config/tui-search/config.toml`). Override it with `--config` or
-`$TUI_SEARCH_CONFIG`. Every key is optional. `search --example-config` prints
+The config file is `$XDG_CONFIG_HOME/search-tui/config.toml` (by default
+`~/.config/search-tui/config.toml`). Override it with `--config` or
+`$SEARCH_TUI_CONFIG`. Every key is optional. `search --example-config` prints
 a fully commented example ([source](internal/config/example.toml)).
 
 ```toml

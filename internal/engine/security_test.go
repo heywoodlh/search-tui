@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/heywoodlh/tui-search/internal/config"
+	"github.com/heywoodlh/search-tui/internal/config"
 )
 
 func redirectReq(t *testing.T, from, to string, hdr map[string]string) *http.Request {

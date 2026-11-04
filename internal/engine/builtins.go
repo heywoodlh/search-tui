@@ -1,7 +1,7 @@
 package engine
 
 import (
-	"github.com/heywoodlh/tui-search/internal/config"
+	"github.com/heywoodlh/search-tui/internal/config"
 )
 
 type builtin struct {

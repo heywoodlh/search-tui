@@ -10,7 +10,7 @@ import (
 	"testing"
 
 	"github.com/PuerkitoBio/goquery"
-	"github.com/heywoodlh/tui-search/internal/config"
+	"github.com/heywoodlh/search-tui/internal/config"
 )
 
 func doc(t *testing.T, path string) *goquery.Document {

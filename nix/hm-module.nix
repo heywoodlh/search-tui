@@ -1,4 +1,4 @@
-# Home Manager module for tui-search.
+# Home Manager module for search-tui.
 self:
 {
   config,
@@ -8,7 +8,7 @@ self:
 }:
 
 let
-  cfg = config.programs.tui-search;
+  cfg = config.programs.search-tui;
   tomlFormat = pkgs.formats.toml { };
   inherit (lib)
     mkEnableOption
@@ -19,21 +19,21 @@ let
     ;
 in
 {
-  options.programs.tui-search = {
-    enable = mkEnableOption "tui-search, a terminal client for web and code search engines";
+  options.programs.search-tui = {
+    enable = mkEnableOption "search-tui, a terminal client for web and code search engines";
 
     package = mkOption {
       type = types.package;
       default = self.packages.${pkgs.stdenv.hostPlatform.system}.default;
-      defaultText = literalExpression "tui-search.packages.\${pkgs.stdenv.hostPlatform.system}.default";
-      description = "The tui-search package to install.";
+      defaultText = literalExpression "search-tui.packages.\${pkgs.stdenv.hostPlatform.system}.default";
+      description = "The search-tui package to install.";
     };
 
     settings = mkOption {
       type = tomlFormat.type;
       default = { };
       description = ''
-        Configuration written to {file}`$XDG_CONFIG_HOME/tui-search/config.toml`.
+        Configuration written to {file}`$XDG_CONFIG_HOME/search-tui/config.toml`.
         Every key of the TOML config file is supported; run
         `search --example-config` for a documented example.
 
@@ -79,8 +79,8 @@ in
   config = mkIf cfg.enable {
     home.packages = [ cfg.package ];
 
-    xdg.configFile."tui-search/config.toml" = mkIf (cfg.settings != { }) {
-      source = tomlFormat.generate "tui-search-config.toml" cfg.settings;
+    xdg.configFile."search-tui/config.toml" = mkIf (cfg.settings != { }) {
+      source = tomlFormat.generate "search-tui-config.toml" cfg.settings;
     };
   };
 }

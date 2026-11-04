@@ -18,8 +18,8 @@
     in
     {
       packages = forAllSystems (pkgs: {
-        tui-search = pkgs.callPackage ./nix/package.nix { inherit version; };
-        default = self.packages.${pkgs.stdenv.hostPlatform.system}.tui-search;
+        search-tui = pkgs.callPackage ./nix/package.nix { inherit version; };
+        default = self.packages.${pkgs.stdenv.hostPlatform.system}.search-tui;
       });
 
       apps = forAllSystems (pkgs: {
@@ -31,7 +31,7 @@
       });
 
       overlays.default = final: _prev: {
-        tui-search = final.callPackage ./nix/package.nix { inherit version; };
+        search-tui = final.callPackage ./nix/package.nix { inherit version; };
       };
 
       homeManagerModules.default = import ./nix/hm-module.nix self;
@@ -74,7 +74,7 @@
                   home.packages = lib.mkOption { type = lib.types.listOf lib.types.package; };
                   xdg.configFile = lib.mkOption { type = lib.types.attrsOf lib.types.anything; };
                 };
-                config.programs.tui-search = {
+                config.programs.search-tui = {
                   enable = true;
                   settings = {
                     default_engine = "wikipedia";
@@ -86,17 +86,18 @@
             ];
             specialArgs = { inherit pkgs; };
           };
-          configFile = hmEval.config.xdg.configFile."tui-search/config.toml".source;
+          configFile = hmEval.config.xdg.configFile."search-tui/config.toml".source;
         in
         {
           package = self.packages.${system}.default;
-          hm-module = pkgs.runCommand "tui-search-hm-module-check" { } ''
+          hm-module = pkgs.runCommand "search-tui-hm-module-check" { } ''
             grep -q 'default_engine = "wikipedia"' ${configFile}
             XDG_CONFIG_HOME=$TMPDIR/cfg
-            mkdir -p $XDG_CONFIG_HOME/tui-search
-            cp ${configFile} $XDG_CONFIG_HOME/tui-search/config.toml
+            mkdir -p $XDG_CONFIG_HOME/search-tui
+            cp ${configFile} $XDG_CONFIG_HOME/search-tui/config.toml
             export XDG_CONFIG_HOME HOME=$TMPDIR
-            ${lib.getExe self.packages.${system}.default} --list-engines | grep -q 'wikipedia (default)'
+            ${lib.getExe self.packages.${system}.default} --list-engines > $TMPDIR/engines
+            grep -q 'wikipedia (default)' $TMPDIR/engines
             touch $out
           '';
         }

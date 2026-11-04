@@ -5,8 +5,8 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/heywoodlh/tui-search/internal/safe"
-	"github.com/heywoodlh/tui-search/internal/summary"
+	"github.com/heywoodlh/search-tui/internal/safe"
+	"github.com/heywoodlh/search-tui/internal/summary"
 )
 
 // Numbered links, like Markdown reference links: results are [1]..[N] and,

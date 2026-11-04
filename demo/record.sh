@@ -4,8 +4,8 @@
 # Usage: demo/record.sh OUT_DIR
 # Produces OUT_DIR/demo.webm, demo.mp4 and demo.png (poster).
 # Needs on PATH: search and vhs (which brings ttyd, ffmpeg and Chromium).
-# Engines used (Wikipedia, Stack Overflow, GitHub repos, Sourcegraph) need no
-# credentials; a GitHub token only raises rate limits.
+# Engines used (Wikipedia, Stack Overflow, Hacker News) need no
+# credentials and give the demo a real results page.
 set -euo pipefail
 
 out="${1:?usage: record.sh OUT_DIR}"
@@ -14,8 +14,8 @@ work="$(mktemp -d)"
 trap 'rm -rf "$work"' EXIT
 
 # Isolated, deterministic environment for the recorded shell.
-mkdir -p "$work/config/tui-search" "$work/out"
-cp "$here/config.toml" "$work/config/tui-search/config.toml"
+mkdir -p "$work/config/search-tui" "$work/out"
+cp "$here/config.toml" "$work/config/search-tui/config.toml"
 cp "$here/demo.tape" "$work/demo.tape"
 export XDG_CONFIG_HOME="$work/config" COLORTERM=truecolor
 
