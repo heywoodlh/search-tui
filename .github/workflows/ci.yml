@@ -42,7 +42,7 @@ jobs:
         if: runner.os == 'Linux'
       - run: go test ./...
         if: runner.os != 'Linux'
-      - name: Release binaries build and are statically linked
+      - name: Release binaries build; Linux ones are statically linked
         if: runner.os == 'Linux'
         run: scripts/build-release.sh "$RUNNER_TEMP/dist"
 

@@ -6,8 +6,9 @@ Website: <https://heywoodlh.github.io/search-tui/> (also readable with `curl`).
 
 `search` is a fast terminal client for web and code search. It has a full
 TUI and an inline CLI, DuckDuckGo-style `!bangs`, and summaries computed on
-your device. It also integrates with `$EDITOR`. It is a single static Go
-binary with no runtime dependencies, so it runs well on a Raspberry Pi Zero,
+your device. It also integrates with `$EDITOR`. It is a single Go binary with
+no dependencies beyond the C library it is built against (the released Linux
+binaries are fully static), so it runs well on a Raspberry Pi Zero,
 a phone (Termux), over SSH or in tmux, and on a full-size monitor.
 
 ```sh
@@ -132,9 +133,9 @@ binaries, plus a `SHA256SUMS` file:
 
 | OS | Architectures | Linking |
 | --- | --- | --- |
-| Linux | amd64, arm64, armv6 (runs on armv6/v7, e.g. Raspberry Pi), riscv64 | static: runs on any distribution (glibc, musl, NixOS, ...) |
-| FreeBSD | amd64, arm64 | static |
-| NetBSD | amd64, arm64 | static |
+| Linux | amd64, arm64, armv6 (runs on armv6/v7, e.g. Raspberry Pi), riscv64 | static (the supported guarantee): runs on any distribution (glibc, musl, NixOS, ...) |
+| FreeBSD | amd64, arm64 | static, as a side effect of building without cgo |
+| NetBSD | amd64, arm64 | static, as a side effect of building without cgo |
 | OpenBSD | amd64, arm64 | base-system `libc`/`libpthread` only (OpenBSD requires system calls to go through libc, so Go can't build a static binary there) |
 | macOS | arm64 | `libSystem`, like every macOS program |
 | Windows | amd64, arm64 | `.exe` |
@@ -144,8 +145,10 @@ curl -LO https://github.com/heywoodlh/search-tui/releases/latest/download/search
 chmod +x search-linux-amd64 && mv search-linux-amd64 ~/.local/bin/search
 ```
 
-CI builds the same binaries on every pull request and fails if any Linux,
-FreeBSD or NetBSD binary isn't statically linked, or if an OpenBSD binary
+Only the Linux binaries carry a static-linking guarantee, and the Nix flake
+package is dynamically linked against the stdenv's glibc like any other
+nixpkgs Go program. CI builds the same binaries on every pull request and
+fails if a Linux binary isn't statically linked, or if an OpenBSD binary
 links anything beyond libc (`scripts/build-release.sh`).
 
 ## Usage

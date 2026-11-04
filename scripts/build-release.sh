@@ -1,17 +1,21 @@
 #!/usr/bin/env bash
-# Cross-compile release binaries into OUT_DIR, write SHA256SUMS and verify
-# how each one is linked.
+# Cross-compile release binaries into OUT_DIR, write SHA256SUMS and check how
+# each one is linked.
 #
 # Usage: scripts/build-release.sh OUT_DIR [VERSION]
 #
-# All builds use CGO_ENABLED=0 (pure Go), so they are self-contained:
-#   - Linux, FreeBSD and NetBSD binaries are fully static and run on any
-#     distribution/release of that OS for the architecture.
-#   - OpenBSD only permits system calls through its libc, so Go always links
-#     libc.so/libpthread.so dynamically there; both ship in every OpenBSD
-#     base install. Verification allows exactly those.
-#   - macOS links libSystem and Windows binaries are PE files; neither has a
-#     static option, and both run on any supported OS version.
+# The static-linking contract applies to the Linux binaries only: they must be
+# fully static so they run on any distribution of that architecture. Every
+# build here uses CGO_ENABLED=0 because the release runners have no cgo cross
+# toolchain, which makes:
+#   - Linux: fully static (asserted below).
+#   - FreeBSD and NetBSD: static as well, a side effect of cgo-free
+#     cross-compiling rather than a promise.
+#   - OpenBSD: dynamic, because OpenBSD only permits system calls through its
+#     libc. libc.so/libpthread.so ship in every OpenBSD base install, so
+#     verification allows exactly those.
+#   - macOS: libSystem, like every macOS program. Windows: a PE file. Neither
+#     has a static option; both run on any supported OS version.
 set -euo pipefail
 
 out="${1:?usage: build-release.sh OUT_DIR [VERSION]}"
@@ -38,13 +42,13 @@ for t in "${targets[@]}"; do
     -o "$out/$name" ./cmd/search
 done
 
-echo "verifying linkage"
+echo "checking linkage"
 fail=0
 for f in "$out"/search-*; do
   name=$(basename "$f")
   desc=$(file -b "$f")
   case "$name" in
-  search-linux-* | search-freebsd-* | search-netbsd-*)
+  search-linux-*)
     if [[ $desc != *"statically linked"* ]]; then
       echo "FAIL $name is not statically linked: $desc" >&2
       fail=1
@@ -61,7 +65,7 @@ for f in "$out"/search-*; do
       echo "ok   $name: base-system libc only ($needed)"
     fi
     ;;
-  *) echo "ok   $name: ${desc%%,*}" ;;
+  *) echo "info $name: ${desc%%,*}" ;;
   esac
 done
 [[ $fail == 0 ]] || exit 1
